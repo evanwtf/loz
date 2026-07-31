@@ -149,7 +149,13 @@ public final class EmulatorHost: ObservableObject {
         clock.start()
         self.clock = clock
         if !isMuted { audio.start() }
-        Log.host.notice("started (muted \(isMuted, privacy: .public))")
+        // Values are hoisted into locals before every log call in this type.
+        // A Logger message is an autoclosure, so referring to a property
+        // directly needs an explicit `self.` — which the formatter's
+        // `--self remove` rule then strips, breaking the build. Locals sidestep
+        // the argument entirely and read better besides.
+        let muted = isMuted
+        Log.host.notice("started (muted \(muted, privacy: .public))")
     }
 
     public func stop() {
@@ -189,10 +195,13 @@ public final class EmulatorHost: ObservableObject {
             profileFrames += 1
             if profileFrames >= 120 {
                 let n = Double(profileFrames)
+                let fps = framesPerSecond
+                let emulateMS = profileEmulation / n * 1000
+                let renderMS = profileRender / n * 1000
                 Log.clock.notice("""
-                perf: \(framesPerSecond, format: .fixed(precision: 1), privacy: .public) fps  \
-                emulate \(profileEmulation / n * 1000, format: .fixed(precision: 2), privacy: .public) ms  \
-                render \(profileRender / n * 1000, format: .fixed(precision: 2), privacy: .public) ms  \
+                perf: \(fps, format: .fixed(precision: 1), privacy: .public) fps  \
+                emulate \(emulateMS, format: .fixed(precision: 2), privacy: .public) ms  \
+                render \(renderMS, format: .fixed(precision: 2), privacy: .public) ms  \
                 budget 16.67 ms
                 """)
                 profileEmulation = 0
