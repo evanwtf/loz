@@ -35,6 +35,11 @@ public final class EmulatorHost: ObservableObject {
     private var lastFPSSample = CFAbsoluteTimeGetCurrent()
     private var framesSinceSample = 0
 
+    /// Frame-budget accounting, populated only while diagnostics are on.
+    private var profileEmulation: Double = 0
+    private var profileRender: Double = 0
+    private var profileFrames = 0
+
     private let audio: AudioOutput
     /// Muting stops audio reaching the speaker but keeps the APU running, so
     /// unmuting resumes mid-phrase rather than restarting a note.
@@ -153,11 +158,36 @@ public final class EmulatorHost: ObservableObject {
     public func tick() {
         guard !isPaused else { return }
 
+        // Where the frame budget actually goes. Only measured when diagnostics
+        // are on: "input takes ten seconds to register" has several possible
+        // causes with completely different fixes — emulation too slow, the
+        // render path too slow, or the clock not firing — and guessing between
+        // them from the outside wastes far more time than measuring.
+        let profiling = LaunchOptions.showDiagnostics
+        let tickStart = profiling ? CFAbsoluteTimeGetCurrent() : 0
+
         for _ in 0..<max(1, speedMultiplier) {
             nes.stepFrame()
             drainAudio()
         }
+        let afterEmulation = profiling ? CFAbsoluteTimeGetCurrent() : 0
         renderCurrentFrame()
+
+        if profiling {
+            let now = CFAbsoluteTimeGetCurrent()
+            profileEmulation += afterEmulation - tickStart
+            profileRender += now - afterEmulation
+            profileFrames += 1
+            if profileFrames >= 120 {
+                let n = Double(profileFrames)
+                print(String(
+                    format: "perf: %.1f fps  emulate %.2f ms  render %.2f ms  budget 16.67 ms",
+                    framesPerSecond, profileEmulation / n * 1000, profileRender / n * 1000))
+                profileEmulation = 0
+                profileRender = 0
+                profileFrames = 0
+            }
+        }
 
         framesSinceSample += 1
         let now = CFAbsoluteTimeGetCurrent()

@@ -24,6 +24,9 @@ final class FrameClock {
     private var timer: Timer?
     private var watchdog: Timer?
     private var lastTick = CFAbsoluteTimeGetCurrent()
+    /// When a frame was last actually emulated, as opposed to when the display
+    /// link last fired. These differ on a display refreshing faster than 60 Hz.
+    private var lastEmulatedFrame = CFAbsoluteTimeGetCurrent() - 1
 
     private let onTick: () -> Void
 
@@ -41,6 +44,20 @@ final class FrameClock {
         guard !isRunning else { return }
 
         if let link = Self.makeDisplayLink(target: self, selector: #selector(tick)) {
+            // Pin to 60 Hz. A display link defaults to the display's maximum
+            // rate, so on a ProMotion device it fires at 120 — and because each
+            // callback steps a whole NES frame, the game ran at double speed
+            // while doing twice the render work.
+            //
+            // The second effect is worse than the first. Two full frames of
+            // emulation plus two CGImage builds per display refresh saturates
+            // the main thread, and once it is saturated the run loop stops
+            // servicing touches promptly: the picture keeps moving because
+            // display link callbacks are privileged, but a tap can sit unread
+            // for seconds. "The game runs but input lags badly" is exactly what
+            // that looks like from the outside.
+            link.preferredFrameRateRange = CAFrameRateRange(
+                minimum: 60, maximum: 60, preferred: 60)
             link.add(to: .main, forMode: .common)
             displayLink = link
             startWatchdog()
@@ -59,7 +76,18 @@ final class FrameClock {
     }
 
     @objc private func tick() {
-        lastTick = CFAbsoluteTimeGetCurrent()
+        let now = CFAbsoluteTimeGetCurrent()
+        // Watchdog liveness is about the link firing at all, so record it even
+        // on refreshes where no frame is emulated.
+        lastTick = now
+
+        // Pace emulation to 60 Hz whatever rate the link actually delivers.
+        // `preferredFrameRateRange` is a request, not a guarantee, and a clock
+        // that emulates once per refresh silently changes the speed of the game
+        // depending on the display it is attached to. The tolerance absorbs
+        // ordinary jitter so a frame arriving slightly early is not dropped.
+        guard now - lastEmulatedFrame >= interval * 0.9 else { return }
+        lastEmulatedFrame = now
         onTick()
     }
 
