@@ -101,6 +101,10 @@ case "analyze":
     print(String(format: "  Branch targets:    %6d", analysis.jumpTargets.count))
     print(String(format: "  Indirect JMPs:     %6d   <- need runtime dispatch",
                  analysis.unresolvedIndirectJumps.count))
+    print(String(format: "\n  Confident   (from vectors, fixed bank): %6d bytes",
+                 analysis.confidentCodeBytes.count))
+    print(String(format: "  Speculative (entry retried per bank):   %6d bytes",
+                 analysis.speculativeCodeBytes.count))
     if !analysis.callsOutsideROM.isEmpty {
         let list = analysis.callsOutsideROM.sorted()
             .map { String(format: "$%04X", $0) }.joined(separator: " ")

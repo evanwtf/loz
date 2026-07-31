@@ -92,6 +92,15 @@ public final class ROMAnalyzer {
         public var unresolvedIndirectJumps: Set<BankedAddress> = []
         /// Addresses outside ROM that were called — RAM-resident code stubs.
         public var callsOutsideROM: Set<UInt16> = []
+
+        /// Bytes reached from the interrupt vectors with the fixed bank mapped.
+        /// These are trustworthy.
+        public var confidentCodeBytes: Set<Int> = []
+
+        /// Bytes found only by re-tracing entry points against banks that may
+        /// not actually contain them. Real code hides here, but so do
+        /// misdecoded data bytes — treat as leads, not facts.
+        public var speculativeCodeBytes: Set<Int> = []
     }
 
     private let cartridge: Cartridge
@@ -151,13 +160,21 @@ public final class ROMAnalyzer {
         ]
 
         // Pass 1: trace everything reachable with the fixed bank as context.
+        // These findings are trustworthy — the fixed bank is genuinely mapped
+        // whenever the vectors run.
         for (addr, bank) in seeds { trace(from: addr, contextBank: bank) }
+        analysis.confidentCodeBytes = analysis.codeBytes
 
-        // Pass 2: every routine we found in the switchable window could belong
-        // to any bank, since we cannot statically know which bank was live.
-        // Re-trace those entry points against each bank. Over-approximates, but
-        // that is the right bias: better to disassemble a byte that turns out to
-        // be data than to miss a routine entirely.
+        // Pass 2: an entry point discovered in the switchable window could
+        // belong to any bank, and static analysis cannot tell which. Re-tracing
+        // it against every bank finds real code, but in the banks where that
+        // address holds data it decodes data as instructions and invents
+        // routines that do not exist.
+        //
+        // Everything found here is therefore recorded as *speculative*, and a
+        // path is abandoned as soon as it does something a real routine would
+        // not — which is the cheap, reliable tell that decoding has gone off
+        // the rails.
         let switchableEntries = (analysis.routines.union(analysis.jumpTargets))
             .filter { (0x8000...0xBFFF).contains($0.address) }
             .map(\.address)
@@ -166,12 +183,23 @@ public final class ROMAnalyzer {
         for bank in 0..<bankCount where bank != lastBank {
             for addr in Set(switchableEntries) { seeds.append((addr, bank)) }
         }
-        for (addr, bank) in seeds { trace(from: addr, contextBank: bank) }
+        for (addr, bank) in seeds { trace(from: addr, contextBank: bank, speculative: true) }
 
+        analysis.speculativeCodeBytes =
+            analysis.codeBytes.subtracting(analysis.confidentCodeBytes)
         return analysis
     }
 
-    private func trace(from start: UInt16, contextBank: Int) {
+    /// Whether a call or jump destination is one real game code could have.
+    ///
+    /// Zelda never executes from RAM, the PPU/APU register window, or the
+    /// cartridge's battery-backed SRAM at $6000-$7FFF. Seeing a "call" to any
+    /// of those means the bytes being decoded are data, not instructions.
+    private func isPlausibleCodeTarget(_ address: UInt16) -> Bool {
+        address >= 0x8000
+    }
+
+    private func trace(from start: UInt16, contextBank: Int, speculative: Bool = false) {
         var worklist: [UInt16] = [start]
         var visited = Set<UInt16>()
 
@@ -203,13 +231,25 @@ public final class ROMAnalyzer {
                 let next = pc &+ UInt16(length)
 
                 switch insn.mnemonic {
+                case .KIL where speculative:
+                    // A jam instruction in speculative code means we are
+                    // decoding data. Abandon this path.
+                    break flow
+
                 case .JSR:
                     if let target = operandWord {
-                        record(target, contextBank: contextBank, as: .routine)
-                        if flatOffset(target, contextBank: contextBank) != nil {
-                            worklist.append(target)
-                        } else {
+                        if !isPlausibleCodeTarget(target) {
                             analysis.callsOutsideROM.insert(target)
+                            // Real Zelda code never calls into RAM, the
+                            // register window, or SRAM. On a speculative path
+                            // this is proof the bytes are data, so stop rather
+                            // than manufacture more phantom routines.
+                            if speculative { break flow }
+                        } else {
+                            record(target, contextBank: contextBank, as: .routine)
+                            if flatOffset(target, contextBank: contextBank) != nil {
+                                worklist.append(target)
+                            }
                         }
                     }
                     pc = next   // a JSR returns; keep going
