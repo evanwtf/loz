@@ -73,6 +73,51 @@ public final class CPU6502 {
         setFlag(Flag.carry, carry)
     }
 
+    public var carryFlag: Bool { flag(Flag.carry) }
+
+    // MARK: ALU operations for decompiled code
+    //
+    // Decompiled routines must leave exactly the flags their 6502 originals
+    // did, because callers branch on them. Re-deriving ADC's overflow rule or
+    // LSR's carry by hand in every converted routine is a reliable way to
+    // introduce subtle bugs, so the real implementations are exposed instead.
+    //
+    // These are a stepping stone. Once a routine's callers are also native,
+    // flags between them stop being observable and the code can be raised to
+    // idiomatic Swift — at which point equivalence is checked at the boundary
+    // of the converted region rather than per routine.
+
+    /// `ADC` — add with carry, setting C, V, Z, and N.
+    public func addWithCarry(_ value: UInt8) {
+        adc(value)
+    }
+
+    /// `SBC` — subtract with borrow.
+    public func subtractWithCarry(_ value: UInt8) {
+        adc(~value)
+    }
+
+    /// `CMP`/`CPX`/`CPY` — sets C, Z, and N without altering the register.
+    public func compareValues(_ register: UInt8, _ value: UInt8) {
+        compare(register, value)
+    }
+
+    /// `LSR` — shifts right, carry takes bit 0. N is always cleared.
+    public func shiftRight(_ value: UInt8) -> UInt8 {
+        setFlag(Flag.carry, value & 0x01 != 0)
+        let result = value >> 1
+        setZN(result)
+        return result
+    }
+
+    /// `ASL` — shifts left, carry takes bit 7.
+    public func shiftLeft(_ value: UInt8) -> UInt8 {
+        setFlag(Flag.carry, value & 0x80 != 0)
+        let result = value << 1
+        setZN(result)
+        return result
+    }
+
     // MARK: Bus helpers
 
     @inline(__always) private func read(_ addr: UInt16) -> UInt8 { bus.cpuRead(addr) }

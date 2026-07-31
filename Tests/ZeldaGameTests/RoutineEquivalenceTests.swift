@@ -83,6 +83,44 @@ struct RoutineEquivalenceTests {
         try verify(address: 0xBF98, name: "writeMapperRegister")
     }
 
+    @Test("loadPulse1Registers matches the 6502 original")
+    func loadPulse1Equivalence() throws {
+        try verify(address: 0x9BFF, name: "loadPulse1Registers")
+    }
+
+    @Test("loadPulse2Registers matches the 6502 original")
+    func loadPulse2Equivalence() throws {
+        try verify(address: 0x9C1D, name: "loadPulse2Registers")
+    }
+
+    @Test("lookupSoundTableEntry matches the 6502 original")
+    func lookupSoundTableEquivalence() throws {
+        try verify(address: 0x9EE2, name: "lookupSoundTableEntry")
+    }
+
+    /// The two pulse loaders write their register pair in opposite orders.
+    /// Swapping either would leave identical final memory, so only the ordered
+    /// write comparison catches it — this asserts that it does.
+    @Test("Swapping the pulse register write order is detected")
+    func writeOrderIsChecked() throws {
+        guard let fixture = try Self.makeFixture() else { return }
+
+        // loadPulse1Registers with its two stores transposed.
+        let swapped = NativeRoutine(name: "swappedPulse1", cycles: 14) { nes in
+            nes.cpuWrite(0x4000, nes.cpu.x)
+            nes.cpuWrite(0x4001, nes.cpu.y)
+        }
+
+        let failures = try RoutineVerifier.verify(
+            cartridge: fixture.cartridge,
+            state: fixture.state,
+            address: 0x9BFF,
+            routine: swapped,
+            trials: 8)
+
+        #expect(!failures.isEmpty, "write ordering must be checked")
+    }
+
     /// Guards the harness itself: a deliberately wrong implementation must be
     /// caught. Without this, a verifier that silently passes everything would
     /// look identical to one that works.
