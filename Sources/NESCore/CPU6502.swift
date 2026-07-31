@@ -117,6 +117,16 @@ public final class CPU6502 {
         pendingIRQ = false
     }
 
+    /// Sets up the stack exactly as a `JSR` would, then jumps to `address`.
+    ///
+    /// Used to invoke a single routine in isolation: run until the PC reaches
+    /// `sentinel` and the routine has returned. The sentinel should be an
+    /// address the routine will never legitimately execute.
+    public func enterSubroutine(at address: UInt16, returningTo sentinel: UInt16) {
+        push16(sentinel &- 1)
+        pc = address
+    }
+
     /// Performs an RTS without executing one.
     ///
     /// After a decompiled routine runs natively, control has to rejoin the

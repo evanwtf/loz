@@ -35,6 +35,12 @@ public final class NES {
     /// the normal path costs one branch.
     public var onInstruction: ((Int, UInt16) -> Void)?
 
+    /// Called for every CPU write when set. Used by the differential harness to
+    /// compare the *ordered* side effects of a decompiled routine against the
+    /// 6502 original — matching final memory is not enough, because PPU and APU
+    /// registers are order-sensitive.
+    public var onMemoryWrite: ((UInt16, UInt8) -> Void)?
+
     public init(cartridge: Cartridge, sampleRate: Double = 44100) throws {
         self.cartridge = cartridge
         self.mapper = try cartridge.makeMapper()
@@ -149,6 +155,7 @@ extension NES: CPUBus {
     }
 
     public func cpuWrite(_ address: UInt16, _ value: UInt8) {
+        onMemoryWrite?(address, value)
         switch address {
         case 0x0000...0x1FFF:
             ram[Int(address & 0x07FF)] = value

@@ -18,10 +18,26 @@ public enum Zelda: GameDefinition {
 
     /// RAM locations recovered so far.
     ///
-    /// Zelda keeps most of its live game state in zero page and the $0400-$06FF
-    /// block. These are seeds; the map fills in as routines are decompiled and
-    /// trace-guided analysis attributes reads and writes to them.
+    /// Found empirically by diffing save states across a known action — walk
+    /// one screen east and see which byte changes, take damage and see which
+    /// byte drops. That method is reliable and needs no prior knowledge, and it
+    /// is how the rest of this map will be filled in.
     public static let symbols = SymbolMap([
+        // Link's position within the current screen, in pixels.
+        0x0070: "linkPositionX",
+        0x0084: "linkPositionY",
+
+        // Current screen. On the overworld this is (row << 4) | column across
+        // a 16x8 grid — Link starts at $77. Inside a dungeon it is the room
+        // number instead; Level 1's entrance room is $73.
+        0x00EB: "currentScreen",
+
+        // Health. High nibble is heart containers minus one, low nibble is the
+        // count of full hearts remaining.
+        0x066F: "linkHealth",
+        // Fractional part of the current heart, 0...255.
+        0x0670: "linkPartialHeart",
+
         // Battery-backed save data lives at $6000-$7FFF (three file slots).
         0x6000: "saveSlot0",
         0x6300: "saveSlot1",

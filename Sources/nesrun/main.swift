@@ -273,6 +273,47 @@ case "play":
         print("Saved state to \(statePath)")
     }
 
+case "navigate":
+    guard let statePath = flag("--load-state", in: args) else {
+        FileHandle.standardError.write(
+            "error: navigate needs --load-state\n".data(using: .utf8)!)
+        exit(1)
+    }
+    guard let targetText = flag("--to", in: args),
+          let target = UInt8(targetText.replacingOccurrences(of: "$", with: ""), radix: 16)
+    else {
+        FileHandle.standardError.write(
+            "error: navigate needs --to <hex screen>, e.g. --to 37\n".data(using: .utf8)!)
+        exit(1)
+    }
+
+    let frames = Int(flag("--move-frames", in: args) ?? "170") ?? 170
+    let maxScreens = Int(flag("--max-screens", in: args) ?? "80") ?? 80
+    let start = try! JSONDecoder().decode(
+        SaveState.self, from: try! Data(contentsOf: URL(fileURLWithPath: statePath)))
+
+    print("Searching for screen \(Navigator.describe(target))...")
+    let found = Navigator.search(
+        cartridge: cartridge, from: start, to: target,
+        framesPerMove: frames, maxScreens: maxScreens,
+        verbose: args.contains("--verbose"))
+
+    guard let found else {
+        print("No route found within \(maxScreens) explored screens.")
+        exit(1)
+    }
+
+    print("\nReached \(Navigator.describe(found.screen)) in \(found.route.count) moves:")
+    for (index, step) in found.route.enumerated() {
+        print("  \(index + 1). \(step)")
+    }
+    
+
+    if let outPath = flag("--save-state", in: args) {
+        try! JSONEncoder().encode(found.state).write(to: URL(fileURLWithPath: outPath))
+        print("\nSaved arrival state to \(outPath)")
+    }
+
 case "audio":
     // Renders the APU to a WAV so sound can actually be listened to and
     // measured, rather than assumed to work because it compiles.
