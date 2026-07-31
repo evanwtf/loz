@@ -39,8 +39,7 @@ import SwiftUI
             let metrics = ControlMetrics.portrait(in: size)
 
             return HStack(alignment: .center, spacing: metrics.gap) {
-                DPadControl(host: host)
-                    .frame(width: metrics.dpadSize, height: metrics.dpadSize)
+                DPadControl(host: host, size: metrics.dpadSize)
 
                 VStack(spacing: metrics.buttonSize * 0.34) {
                     systemRow(buttonSize: metrics.buttonSize)
@@ -67,8 +66,7 @@ import SwiftUI
             let metrics = ControlMetrics.landscape(controlWidth: controlWidth, height: height)
 
             return HStack(spacing: 0) {
-                DPadControl(host: host)
-                    .frame(width: metrics.dpadSize, height: metrics.dpadSize)
+                DPadControl(host: host, size: metrics.dpadSize)
                     .frame(width: controlWidth, height: height, alignment: .center)
 
                 Spacer(minLength: 0)
@@ -107,6 +105,17 @@ import SwiftUI
     /// lives in `DPadGeometry` so it can be tested without a touch.
     struct DPadControl: View {
         let host: EmulatorHost
+        /// Edge length, passed in rather than measured.
+        ///
+        /// This used to wrap the pad in a `GeometryReader` to discover its own
+        /// size. That made the pad the only control whose gesture lived inside
+        /// a layout container that re-resolves on every published frame — 60
+        /// times a second — while `ActionButton` and `SystemButton` are plain
+        /// leaves. It was also the only control that needed a 300–1000 ms hold
+        /// before a press registered, on a device where A and B were instant.
+        /// `ControlMetrics` already knows this number, so the measurement was
+        /// never necessary.
+        let size: CGFloat
         @State private var active: NESButton = []
 
         /// Where each direction's pressed indicator sits, as a fraction of the
@@ -120,39 +129,35 @@ import SwiftUI
         ]
 
         var body: some View {
-            GeometryReader { geometry in
-                let size = min(geometry.size.width, geometry.size.height)
-
-                ZStack {
-                    Image(systemName: "dpad.fill")
-                        .resizable()
-                        .foregroundStyle(.white.opacity(0.22))
-                    Image(systemName: "dpad")
-                        .resizable()
-                        .foregroundStyle(.white.opacity(0.5))
-                    // A thumb covers the arm it is pressing, so the pad gave no
-                    // feedback at all: "I can't tell if down is being pressed"
-                    // is unanswerable while the only signal is under a finger.
-                    // These sit inboard of the arms, where they stay visible.
-                    ForEach(0..<Self.arms.count, id: \.self) { index in
-                        let arm = Self.arms[index]
-                        if active.contains(arm.button) {
-                            Circle()
-                                .fill(.white.opacity(0.9))
-                                .frame(width: size * 0.13, height: size * 0.13)
-                                .position(x: arm.unit.x * size, y: arm.unit.y * size)
-                        }
+            ZStack {
+                Image(systemName: "dpad.fill")
+                    .resizable()
+                    .foregroundStyle(.white.opacity(0.22))
+                Image(systemName: "dpad")
+                    .resizable()
+                    .foregroundStyle(.white.opacity(0.5))
+                // A thumb covers the arm it is pressing, so the pad gave no
+                // feedback at all: "I can't tell if down is being pressed"
+                // is unanswerable while the only signal is under a finger.
+                // These sit inboard of the arms, where they stay visible.
+                ForEach(0..<Self.arms.count, id: \.self) { index in
+                    let arm = Self.arms[index]
+                    if active.contains(arm.button) {
+                        Circle()
+                            .fill(.white.opacity(0.9))
+                            .frame(width: size * 0.13, height: size * 0.13)
+                            .position(x: arm.unit.x * size, y: arm.unit.y * size)
                     }
                 }
-                .frame(width: size, height: size)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            apply(DPadGeometry.direction(at: value.location, in: size))
-                        }
-                        .onEnded { _ in apply([]) })
             }
+            .frame(width: size, height: size)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        apply(DPadGeometry.direction(at: value.location, in: size))
+                    }
+                    .onEnded { _ in apply([]) })
         }
 
         private func apply(_ next: NESButton) {
