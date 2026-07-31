@@ -1,8 +1,8 @@
 # Agent harness
 
-`nesrun play` drives the game without a human: scripted input, PNG output, and
-resumable snapshots. It exists so an agent can walk around the world and check
-that things look right.
+`nesrun` drives the game without a human: scripted input, PNG output, resumable
+snapshots, pathfinding, and audio capture. It exists so an agent can explore the
+world and check that things actually work.
 
 ## Why snapshots matter
 
@@ -27,6 +27,18 @@ Snapshots are gitignored: they embed CHR-RAM, which is game data. The input
 script that regenerates them is committed instead, so the workflow is
 reproducible without redistributing anything from the cartridge.
 
+## Commands
+
+| Command | Purpose |
+|---|---|
+| `info` | Cartridge geometry and interrupt vectors |
+| `hash` | SHA-256, for pinning a `GameDefinition` |
+| `analyze` | Static code/data analysis, split by confidence |
+| `disasm --bank N` | Annotated listing for one 16KB bank |
+| `play` | Scripted input, screenshots, snapshots, tracing |
+| `navigate --to XX` | Pathfind to an overworld screen |
+| `audio --seconds N` | Render the APU to a WAV with signal statistics |
+
 ## Input scripts
 
 Comma-separated `buttons:frames` segments. Combine simultaneous buttons with
@@ -38,6 +50,40 @@ wait:60,start:4,up+a:12,right:150
 
 Buttons: `up down left right a b start select wait`.
 
+## Navigating
+
+`navigate` breadth-first searches over overworld screens by actually driving the
+game and reading `$00EB`, so routes are discovered rather than hand-written.
+
+```sh
+swift run -c release nesrun navigate zelda.nes \
+  --load-state /tmp/overworld.state --to 37 --save-state /tmp/level1.state
+```
+
+Two things this had to solve, both non-obvious:
+
+- **Link dies.** He starts unarmed, and Octoroks killed him mid-search, freezing
+  every branch as a dead end. Health is topped up during exploration.
+- **Straight pushes almost never work.** Screen gaps are about a tile wide — on
+  screen `$67`, moving up 80 frames then left escapes, but 70 or 100 do not. So
+  the search *sweeps*: it holds the target direction while oscillating
+  perpendicular, letting Link slide along the wall into whatever gap exists. One
+  sweep per direction covers every offset.
+
+The same sweep trick is what gets Link through dungeon doorways, which sit at
+fixed positions in each wall.
+
+## Known route to Level 1
+
+```
+$77 start -> $78 -> $58 -> $48 -> $28 -> $38
+$38 is water with one narrow bridge: down:100, then left:300 reaches $37
+$37 is the Level 1 entrance: right:12, up:140 goes in
+```
+
+Inside a dungeon, `$00EB` becomes the room number instead of the overworld
+screen. Level 1's entrance room is `$73`.
+
 ## Menu navigation
 
 Non-obvious, and worth writing down because it cost real time to derive:
@@ -48,7 +94,7 @@ Non-obvious, and worth writing down because it cost real time to derive:
 | File select | `start` on "REGISTER YOUR NAME" opens registration |
 | Registration | **d-pad moves the letter grid**, `a` types the highlighted letter |
 | Registration | **`select` moves the heart cursor** between file rows |
-| Registration | The `REGISTER` / `END` row is one row — `left`/`right` picks between them |
+| Registration | `REGISTER` / `END` is one row — `left`/`right` picks between them |
 | Registration | `start` acts as Enter/confirm |
 | File select | `start` begins the game on the highlighted file |
 
@@ -58,8 +104,34 @@ Non-obvious, and worth writing down because it cost real time to derive:
 |---|---|
 | `--filmstrip <dir> --every <n>` | PNG every n frames — the fastest way to see where a sequence goes wrong |
 | `--watch <hex addrs>` | Print RAM bytes at the end, e.g. `--watch 00EB,0070` |
-| `--trace` | Record executed code and report bytes static analysis never found |
+| `--trace` | Record executed code and report coverage against static analysis |
+| `--trace-in` / `--trace-out` | Merge coverage across sessions |
+| `--native` | Install decompiled Swift routines and report their call counts |
 | `--scale <n>` | Screenshot scale; 2–3 keeps pixel art legible |
+
+## Finding RAM addresses
+
+The reliable method needs no prior knowledge: **snapshot, perform a known
+action, snapshot again, diff**.
+
+```sh
+nesrun play zelda.nes --load-state a.state --input "right:200" --save-state b.state
+# then diff the `ram` arrays in the two JSON files
+```
+
+Walking one screen east isolates the screen variable; taking damage isolates
+health. Everything in `Zelda.symbols` was found this way.
+
+## Audio
+
+```sh
+swift run -c release nesrun audio zelda.nes --seconds 12 --out title.wav
+```
+
+Reports peak, RMS, and zero-crossing rate. Those statistics are the quickest
+check that the APU is producing music rather than silence or a DC offset — the
+first run showed **zero crossings: 0**, which is exactly what a constant DC
+level looks like and nothing like audio.
 
 ## Overworld reference map
 
@@ -82,8 +154,6 @@ x = 256 + col * 256
 y =       row * 176
 ```
 
-That means a rendered play area can be compared directly against the
-corresponding crop — the basis for automated visual checks as the decompilation
-progresses. Expect palette and sprite differences: the reference has no Link,
-no enemies, and was captured with a different palette table, so compare
-structure rather than exact pixels.
+`$00EB` encodes the screen as `(row << 4) | col`, so a screen number maps
+straight onto a crop. Cropping the map is how the Level 1 route above was
+confirmed before spending any emulator time on it.
