@@ -9,12 +9,16 @@ import NESCore
 public struct GameLauncher<G: GameDefinition>: View {
 
     private let game: G.Type
+    /// Explicit ROM location. Command-line launched builds are not app bundles,
+    /// so they pass a path; bundled apps leave this nil and use their resource.
+    private let romURL: URL?
 
     @State private var host: EmulatorHost?
     @State private var failure: String?
 
-    public init(game: G.Type) {
+    public init(game: G.Type, romURL: URL? = nil) {
         self.game = game
+        self.romURL = romURL
     }
 
     public var body: some View {
@@ -43,14 +47,15 @@ public struct GameLauncher<G: GameDefinition>: View {
     }
 
     private func load() {
-        guard let url = Bundle.main.url(
+        let bundled = Bundle.main.url(
             forResource: G.romResourceName, withExtension: "nes")
-        else {
-            failure = """
-                Missing ROM resource "\(G.romResourceName).nes".
 
-                ROMs are not committed to the repository. Copy your own dump \
-                into Apps/ZeldaiOS/ before building.
+        guard let url = romURL ?? bundled else {
+            failure = """
+                Missing ROM "\(G.romResourceName).nes".
+
+                ROMs are not committed to the repository. Supply your own dump \
+                of a cartridge you own.
                 """
             return
         }

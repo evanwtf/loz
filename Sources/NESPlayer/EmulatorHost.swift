@@ -27,7 +27,7 @@ public final class EmulatorHost: ObservableObject {
     /// Multiplies emulation speed; held down for fast-forward.
     @Published public var speedMultiplier: Int = 1
 
-    private var displayLink: CADisplayLink?
+    private var clock: FrameClock?
     private var lastFPSSample = CFAbsoluteTimeGetCurrent()
     private var framesSinceSample = 0
 
@@ -67,32 +67,25 @@ public final class EmulatorHost: ObservableObject {
     }
 
     public func start() {
-        guard displayLink == nil else { return }
-        let link = Self.makeDisplayLink(target: self, selector: #selector(tick))
-        link?.add(to: .main, forMode: .common)
-        displayLink = link
+        guard clock == nil else { return }
+        let clock = FrameClock { [weak self] in self?.tick() }
+        clock.start()
+        self.clock = clock
         if !isMuted { audio.start() }
     }
 
     public func stop() {
-        displayLink?.invalidate()
-        displayLink = nil
+        clock?.stop()
+        clock = nil
         audio.stop()
         saveBatterySave()
     }
 
-    private static func makeDisplayLink(target: Any, selector: Selector) -> CADisplayLink? {
-        #if canImport(AppKit)
-        // CADisplayLink arrived on macOS in 14.0 and is vended by the screen.
-        return NSScreen.main?.displayLink(target: target, selector: selector)
-        #else
-        return CADisplayLink(target: target, selector: selector)
-        #endif
-    }
-
     // MARK: Frame loop
 
-    @objc private func tick() {
+    /// Runs one frame. Exposed so headless self-tests can drive the host
+    /// without a display attached.
+    public func tick() {
         guard !isPaused else { return }
 
         for _ in 0..<max(1, speedMultiplier) {
@@ -123,10 +116,15 @@ public final class EmulatorHost: ObservableObject {
         frame = FrameRenderer.image(from: nes.framebuffer)
     }
 
+    /// Total samples the APU has produced since launch. Diagnostic: if this is
+    /// not advancing at roughly the sample rate, audio is starving.
+    public private(set) var totalAudioSamples = 0
+
     private func drainAudio() {
         let ready = nes.apu.availableSamples
         guard ready > 0 else { return }
         let samples = nes.apu.drain(count: ready)
+        totalAudioSamples += samples.count
         // While fast-forwarding, the APU generates several frames' worth of
         // audio per display frame. Playing it all would sound like chipmunks
         // and overflow the queue, so drop it and keep the picture responsive.

@@ -44,6 +44,8 @@ let package = Package(
         // MFi controller support. Game-agnostic — it takes a GameDefinition.
         .target(name: "NESPlayer", dependencies: ["NESCore"]),
         .executableTarget(name: "nesrun", dependencies: ["NESCore", "NESAnalysis", "ZeldaGame"]),
+        // macOS build that runs straight from SwiftPM — the fast dev loop.
+        .executableTarget(name: "zeldamac", dependencies: ["NESPlayer", "ZeldaGame"]),
         .testTarget(name: "NESCoreTests", dependencies: ["NESCore"]),
     ]
 )
