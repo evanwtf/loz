@@ -143,10 +143,16 @@ final class AudioOutput {
     private func configureSession() {
         #if os(iOS) || os(tvOS)
             do {
-                // .ambient respects the ring/silent switch and mixes with other
-                // audio, so starting the game never interrupts a podcast.
+                // .playback, not .ambient. `.ambient` obeys the ring/silent
+                // switch, which meant the game was silent on any phone that
+                // lives on silent — which is most of them, and it reads as
+                // "the sound is broken" rather than as a considered choice.
+                // A game's audio is part of the game.
+                //
+                // `.mixWithOthers` keeps the original courtesy: starting Zelda
+                // still does not interrupt a podcast.
                 try AVAudioSession.sharedInstance().setCategory(
-                    .ambient, mode: .default, options: [.mixWithOthers])
+                    .playback, mode: .default, options: [.mixWithOthers])
                 try AVAudioSession.sharedInstance().setActive(true)
             } catch {
                 print("audio: session configuration failed — \(error)")
