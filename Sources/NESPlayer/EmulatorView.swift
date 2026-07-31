@@ -69,9 +69,10 @@ public struct EmulatorView: View {
                     break
                 }
             }
-            .overlay(alignment: .topLeading) {
-                if showDiagnostics { diagnostics }
-            }
+            // The diagnostics overlay is placed per-layout rather than over the
+            // whole view: on a phone it would otherwise sit on top of the
+            // picture, which is the one thing it must not obscure. See
+            // `content`.
             .overlay(alignment: .topTrailing) {
                 if !showMenu { menuButton }
             }
@@ -115,9 +116,13 @@ public struct EmulatorView: View {
             }
         #else
             // macOS and tvOS drive input from keyboard or a game controller, so the
-            // screen gets the whole window.
+            // screen gets the whole window. With no controls to tuck it beside,
+            // the overlay has nowhere to go but on top of the picture.
             GameScreen(image: host.frame)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay(alignment: .topLeading) {
+                    if showDiagnostics { diagnostics }
+                }
         #endif
     }
 
@@ -130,6 +135,13 @@ public struct EmulatorView: View {
                 // sitting in a fixed strip with dead space above.
                 TouchControls(host: host, layout: .portrait(size))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    // The cluster sits at the bottom of this band, leaving a
+                    // few hundred points of empty space directly beneath the
+                    // screen. That is where the diagnostics belong: legible,
+                    // and not covering the game.
+                    .overlay(alignment: .topLeading) {
+                        if showDiagnostics { diagnostics }
+                    }
             }
         }
 
@@ -150,6 +162,14 @@ public struct EmulatorView: View {
                     layout: .landscape(controlWidth: controlWidth, height: size.height))
             }
             .frame(width: size.width, height: size.height)
+            // The d-pad is centred in its column, so the space above it is
+            // free. Constraining the overlay to the column keeps it off the
+            // picture entirely rather than only mostly off it.
+            .overlay(alignment: .topLeading) {
+                if showDiagnostics {
+                    diagnostics.frame(width: controlWidth, alignment: .leading)
+                }
+            }
         }
     #endif
 
@@ -175,7 +195,11 @@ public struct EmulatorView: View {
             Text("pad \(Self.padDescription(host.nes.controller1.buttons))")
             // Which build this is. Saves guessing whether a fix is actually on
             // the device, which is otherwise unanswerable from the device.
-            Text(BuildInfo.short)
+            // Split across two lines so the block stays narrow enough for the
+            // landscape control column.
+            Text(BuildInfo.identity)
+                .foregroundStyle(.green.opacity(0.7))
+            Text(BuildInfo.builtStamp)
                 .foregroundStyle(.green.opacity(0.7))
             if host.speedMultiplier > 1 {
                 Text("\(host.speedMultiplier)x").foregroundStyle(.yellow)

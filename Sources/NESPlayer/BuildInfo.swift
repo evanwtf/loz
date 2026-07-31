@@ -42,14 +42,23 @@ public enum BuildInfo {
         return attributes[.modificationDate] as? Date
     }
 
-    /// Compact one-line form for the diagnostics overlay.
-    public static var short: String {
-        let stamp = built.map {
+    /// Which build this is, without the timestamp — "1.0 (1) release".
+    public static var identity: String {
+        "\(version) (\(build)) \(configuration)"
+    }
+
+    /// When it was linked, in a form short enough for a narrow overlay column.
+    public static var builtStamp: String {
+        built.map {
             let formatter = DateFormatter()
             formatter.dateFormat = "MMM d HH:mm"
             return formatter.string(from: $0)
         } ?? "unknown"
-        return "\(version) (\(build)) \(configuration) · \(stamp)"
+    }
+
+    /// Compact one-line form.
+    public static var short: String {
+        "\(identity) · \(builtStamp)"
     }
 
     /// Fuller form for the log, written once at launch so every captured log
