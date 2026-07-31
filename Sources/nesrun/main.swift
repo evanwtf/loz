@@ -218,10 +218,9 @@ case "play":
         print("Resumed from \(statePath) at frame \(nes.ppu.frame)")
     }
 
-    // Trace coverage is accumulated in a reference box so the instruction
-    // observer can mutate it without capture-semantics surprises.
-    let tracer = CoverageTracer(lastBank: cartridge.prgBankCount16K - 1)
-    if args.contains("--trace") {
+    let tracer = ExecutionTracer(cartridge: cartridge)
+    let tracing = args.contains("--trace") || flag("--trace-out", in: args) != nil
+    if tracing {
         nes.onInstruction = { [tracer] bank, pc in tracer.record(bank: bank, pc: pc) }
     }
 
@@ -241,16 +240,25 @@ case "play":
         print("Watch: " + values.joined(separator: "  "))
     }
 
-    if args.contains("--trace") {
+    if tracing {
+        var trace = tracer.trace(note: flag("--input", in: args) ?? "no input")
+
+        // Merge earlier sessions so coverage accumulates across many short
+        // exploration runs rather than restarting each time.
+        if let inPath = flag("--trace-in", in: args),
+           let previous = try? ExecutionTrace.read(from: URL(fileURLWithPath: inPath)) {
+            let before = trace.executedOffsets.count
+            trace.merge(previous)
+            print("Merged \(inPath): \(before) -> \(trace.executedOffsets.count) bytes\n")
+        }
+
         let analyzer = ROMAnalyzer(cartridge: cartridge)
-        let statically = analyzer.analyze()
-        let seen = tracer.executed
-        let novel = seen.subtracting(statically.codeBytes)
-        print("""
-        Trace coverage:
-          executed bytes:       \(seen.count)
-          not found statically: \(novel.count)   <- discovered by playing
-        """)
+        print(trace.report(cartridge: cartridge, static: analyzer.analyze()))
+
+        if let outPath = flag("--trace-out", in: args) {
+            try? trace.write(to: URL(fileURLWithPath: outPath))
+            print("\nWrote trace to \(outPath)")
+        }
     }
 
     if let outPath = flag("--out", in: args) {
@@ -363,23 +371,6 @@ case "paltrace":
 
 default:
     usage()
-}
-
-/// Accumulates executed PRG offsets, folded the same way the static analyzer
-/// folds them so the two coverage sets can be compared directly.
-final class CoverageTracer {
-    private(set) var executed = Set<Int>()
-    private let lastBank: Int
-
-    init(lastBank: Int) { self.lastBank = lastBank }
-
-    func record(bank: Int, pc: UInt16) {
-        switch pc {
-        case 0x8000...0xBFFF: executed.insert(bank * 0x4000 + Int(pc - 0x8000))
-        case 0xC000...0xFFFF: executed.insert(lastBank * 0x4000 + Int(pc - 0xC000))
-        default: break   // RAM-resident code, not a ROM offset
-        }
-    }
 }
 
 /// Parses and runs an input script such as "wait:60,start:4,up+a:12".
