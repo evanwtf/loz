@@ -49,9 +49,16 @@ import SwiftUI
                 .frame(width: metrics.columnWidth)
             }
             .padding(.horizontal, metrics.margin)
+            // The inset must be applied *inside* the frame. Outside it, the
+            // frame has already claimed the full height, so the padding cannot
+            // push anything up — it just overflows below the container and is
+            // clipped, leaving the cluster flush against the bottom of the
+            // display. That put the d-pad's DOWN key half off-screen and inside
+            // the home-indicator gesture strip, where the system withholds
+            // touches from the app while its own recogniser decides.
+            .padding(.bottom, metrics.bottomInset)
             // Sit toward the bottom: that is where thumbs actually rest.
             .frame(width: size.width, height: size.height, alignment: .bottom)
-            .padding(.bottom, metrics.bottomInset)
         }
 
         // MARK: Landscape
