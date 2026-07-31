@@ -153,12 +153,26 @@ public struct EmulatorView: View {
         }
     #endif
 
+    /// Pressed buttons as letters, or a dash when nothing is held.
+    private static func padDescription(_ buttons: NESButton) -> String {
+        let names: [(NESButton, String)] = [
+            (.up, "U"), (.down, "D"), (.left, "L"), (.right, "R"),
+            (.select, "sel"), (.start, "start"), (.b, "B"), (.a, "A"),
+        ]
+        let held = names.filter { buttons.contains($0.0) }.map(\.1)
+        return held.isEmpty ? "—" : held.joined(separator: " ")
+    }
+
     private var diagnostics: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(String(format: "%.0f fps", host.framesPerSecond))
             Text("bank \(host.nes.mapper.currentPRGBank)")
             Text(String(format: "PC $%04X", host.nes.cpu.pc))
             Text("scanline \(host.nes.ppu.scanline)")
+            // Live pad state. "The buttons do nothing" is ambiguous between
+            // the press never arriving and the game ignoring it; this splits
+            // those apart without a debugger or a cable.
+            Text("pad \(Self.padDescription(host.nes.controller1.buttons))")
             if host.speedMultiplier > 1 {
                 Text("\(host.speedMultiplier)x").foregroundStyle(.yellow)
             }
