@@ -5,18 +5,24 @@ game — no ROM picker, no menu.
 
 ## Supplying the ROM
 
-The ROM is gitignored and must be provided locally:
+**The app ships no `.nes` file.** The cartridge image is compiled into the
+binary as Swift source, so there is no bundle resource and no way for the app
+to fail to find one at launch.
+
+Generate it once from your own dump:
 
 ```sh
-cp /path/to/zelda.nes Apps/ZeldaiOS/zelda.nes
+swift run nesrun embed zelda.nes
 ```
 
-The app target uses a **file-system synchronized group**, so the ROM is picked
-up as a bundle resource automatically — no `project.pbxproj` edit, matching the
-StationCast guardrail against hand-editing that file to add files.
+That writes `Sources/ZeldaGame/ZeldaROMData.swift`. It is **gitignored** — it
+holds the same bytes as the cartridge, so committing it would put in the
+repository exactly what was deliberately kept out.
 
-At launch, `GameLauncher` verifies the ROM against `Zelda.expectedROMHash`. A
-different dump fails with a visible message rather than a black screen.
+`GameLauncher` still verifies the image against `Zelda.expectedROMHash`, so a
+wrong dump fails visibly rather than producing subtle nonsense. (A ROM file is
+still accepted as a fallback, which is how the macOS build takes a path
+argument.)
 
 ## Building and running
 
@@ -114,10 +120,13 @@ than inserting silence, which would click.
 
 ## Saves
 
-Cartridge battery RAM is persisted to Application Support as `zelda.sav`,
-flushed every ~3 seconds and on exit. Save *states* (full machine snapshots)
-exist in `NESCore` and are used by the agent harness, but are not yet surfaced
-in the app — see [#14](../../../issues/14).
+Three separate mechanisms, each with a different job:
+
+| | What it is |
+|---|---|
+| **Battery save** (`zelda.sav`) | The cartridge's own SRAM — the game's save files. Flushed every ~3 seconds and on exit. |
+| **Save states** (4 slots) | Full machine snapshots the player chooses to keep, with thumbnails, in the in-game menu. |
+| **Auto-resume** | An automatic snapshot so the app comes back where it left off. See below. |
 
 ## Sideloading to a device
 
