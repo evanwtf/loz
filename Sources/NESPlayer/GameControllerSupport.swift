@@ -9,18 +9,49 @@ import SwiftUI
 struct GameControllerSupport: ViewModifier {
     let host: EmulatorHost
 
+    /// Whether any usable gamepad is currently attached. Only surfaced on
+    /// tvOS, where it is the difference between "playable" and "appears
+    /// broken" — there is no touchscreen fallback.
+    @State private var hasController = false
+
     func body(content: Content) -> some View {
         content
             .task {
                 attachExisting()
                 await observeConnections()
             }
+        #if os(tvOS)
+            .overlay(alignment: .bottom) {
+                if !hasController { controllerHint }
+            }
+        #endif
     }
+
+    #if os(tvOS)
+        private var controllerHint: some View {
+            VStack(spacing: 10) {
+                Image(systemName: "gamecontroller")
+                    .font(.system(size: 40))
+                Text("Connect a game controller")
+                    .font(.title3.weight(.semibold))
+                Text("The Siri Remote cannot play this game. "
+                    + "Pair an Xbox, DualSense, or MFi controller in Settings.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 520)
+            }
+            .padding(28)
+            .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 18))
+            .padding(.bottom, 60)
+        }
+    #endif
 
     private func attachExisting() {
         for controller in GCController.controllers() {
             attach(controller)
         }
+        hasController = GCController.controllers().contains { $0.extendedGamepad != nil }
         GCController.startWirelessControllerDiscovery()
     }
 
@@ -36,6 +67,7 @@ struct GameControllerSupport: ViewModifier {
 
     private func attach(_ controller: GCController) {
         guard let pad = controller.extendedGamepad else { return }
+        hasController = true
 
         // Face buttons. A/B are swapped relative to the Xbox layout so that the
         // physical right-hand button is NES A, which is what muscle memory and
