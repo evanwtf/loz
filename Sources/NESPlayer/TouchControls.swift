@@ -135,9 +135,7 @@ import SwiftUI
                 }
             }
             active = next
-            if !next.isEmpty {
-                UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.3)
-            }
+            if !next.isEmpty { Haptics.direction() }
         }
     }
 
@@ -167,7 +165,7 @@ import SwiftUI
                             guard !isPressed else { return }
                             isPressed = true
                             host.setButton(button, pressed: true)
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            Haptics.action()
                         }
                         .onEnded { _ in
                             isPressed = false
@@ -200,6 +198,7 @@ import SwiftUI
                             guard !isPressed else { return }
                             isPressed = true
                             host.setButton(button, pressed: true)
+                            Haptics.system()
                         }
                         .onEnded { _ in
                             isPressed = false
