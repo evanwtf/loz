@@ -157,3 +157,28 @@ y =       row * 176
 `$00EB` encodes the screen as `(row << 4) | col`, so a screen number maps
 straight onto a crop. Cropping the map is how the Level 1 route above was
 confirmed before spending any emulator time on it.
+
+## Automated visual checking
+
+`mapcheck` compares a rendered overworld screen against the reference map:
+
+```sh
+swift run -c release nesrun mapcheck zelda.nes --load-state /tmp/ow.state
+# screen $77 (col 7, row 7)  structural correlation 0.999  [PASS]
+```
+
+It cannot be a pixel comparison — the reference has no Link, no enemies, and a
+different palette table. Instead both images are reduced to a grid of block
+luminances and correlated, so terrain layout dominates and sprites do not.
+
+Measured on five screens: **0.949 to 0.999**.
+
+One caveat learned the hard way. Screen `$38` initially scored **0.404**, which
+looked exactly like a rendering bug — until walking Link a little further showed
+the bridge, statue, and enemies all rendering correctly. `navigate` snapshots on
+arrival, sometimes mid-scroll, and sampling too early captures a composite of
+two screens. Hence the generous `--settle` default of 90 frames.
+
+Correlation is also unreliable on low-variance screens (large uniform water or
+darkness), where there is little structure to correlate. Treat a single low
+score as a prompt to look, not as proof of a defect.

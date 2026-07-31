@@ -291,6 +291,46 @@ case "play":
         print("Saved state to \(statePath)")
     }
 
+case "mapcheck":
+    // Structural comparison of rendered overworld screens against the
+    // reference map. Turns "does the overworld look right" into a number.
+    let mapPath = flag("--map", in: args) ?? "Reference/overworld-first-quest.png"
+    let threshold = Double(flag("--threshold", in: args) ?? "0.55") ?? 0.55
+
+    guard let statePath = flag("--load-state", in: args) else {
+        FileHandle.standardError.write(
+            "error: mapcheck needs --load-state\n".data(using: .utf8)!)
+        exit(1)
+    }
+    let start = try! JSONDecoder().decode(
+        SaveState.self, from: try! Data(contentsOf: URL(fileURLWithPath: statePath)))
+
+    let nes = try! NES(cartridge: cartridge)
+    try! nes.restoreState(start)
+    // Let any in-progress screen transition finish before sampling.
+    //
+    // This needs to be generous. Zelda scrolls between overworld screens over
+    // roughly a second, and `navigate` snapshots on arrival — often mid-scroll.
+    // Sampling too early captures a composite of two screens, which scored
+    // 0.404 against the map and looked exactly like a rendering bug.
+    let settleFrames = Int(flag("--settle", in: args) ?? "90") ?? 90
+    for _ in 0..<settleFrames { nes.stepFrame() }
+
+    let screen = nes.cpuRead(Navigator.screenAddress)
+    guard let result = MapCheck.score(
+        framebuffer: nes.framebuffer, screen: screen, mapPath: mapPath)
+    else {
+        FileHandle.standardError.write(
+            "error: could not read \(mapPath) or screen out of range\n".data(using: .utf8)!)
+        exit(1)
+    }
+
+    let verdict = result.correlation >= threshold ? "PASS" : "FAIL"
+    print(String(
+        format: "screen $%02X (col %d, row %d)  structural correlation %.3f  [%@]",
+        screen, result.column, result.row, result.correlation, verdict))
+    if result.correlation < threshold { exit(1) }
+
 case "navigate":
     guard let statePath = flag("--load-state", in: args) else {
         FileHandle.standardError.write(
