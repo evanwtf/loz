@@ -40,7 +40,11 @@
           wrapIfStatementBodies, wrapLoopBodies, wrapPropertyBodies, \
           wrap, wrapArguments
 
---exclude .build,Reference
+# Generated ROM data is machine-written and gitignored, so linting it only
+# produces noise — and a lint error against a generated file invites someone to
+# hand-edit one. CI never sees it (no ROM, so it does not exist there), but a
+# developer who has run `nesrun embed` would otherwise fail the gate locally.
+--exclude .build,Reference,Sources/ZeldaGame/ZeldaROMData.swift,Sources/*/ROMData.swift
 
 # Ranges without spaces: 0..<n reads better than 0 ..< n and matches
 # prevailing Swift style.
