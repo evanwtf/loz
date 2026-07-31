@@ -137,6 +137,8 @@ public final class PPU {
         let addr = address & 0x3FFF
         switch addr {
         case 0x0000...0x1FFF:
+            // Pattern fetches are what mappers with scanline counters watch.
+            mapper.ppuAddressChanged(addr)
             return mapper.ppuRead(addr)
         case 0x2000...0x3EFF:
             return vram[mapper.mirroring.vramIndex(for: addr & 0x2FFF)]

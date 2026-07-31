@@ -18,6 +18,15 @@ public final class NES {
     /// Total CPU cycles since power-on.
     public private(set) var cycles = 0
 
+    /// Routines that have been decompiled to Swift. When the CPU reaches a
+    /// registered address the native version runs instead of the interpreter.
+    /// Empty by default, so an unmodified `NES` is a plain emulator.
+    public var nativeRoutines = RoutineTable()
+
+    /// Counts how often each native routine ran — useful for confirming a
+    /// conversion is actually on the hot path before optimising it.
+    public private(set) var nativeCallCounts: [RoutineKey: Int] = [:]
+
     public init(cartridge: Cartridge) throws {
         self.cartridge = cartridge
         self.mapper = try cartridge.makeMapper()
@@ -41,7 +50,8 @@ public final class NES {
     /// Runs one CPU instruction and the three-times-faster PPU alongside it.
     @discardableResult
     public func step() -> Int {
-        let cpuCycles = cpu.step()
+        let cpuCycles = dispatchNativeRoutine() ?? cpu.step()
+
         for _ in 0..<(cpuCycles * 3) {
             ppu.step()
             if ppu.nmiRequested {
@@ -49,8 +59,27 @@ public final class NES {
                 cpu.triggerNMI()
             }
         }
+        // Mappers with a scanline counter raise IRQ from PPU activity.
+        cpu.setIRQLine(mapper.irqAsserted)
+
         cycles += cpuCycles
         return cpuCycles
+    }
+
+    /// If a decompiled routine is registered at the current PC, runs it and
+    /// returns to the caller. Returns the cycles consumed, or nil when the
+    /// interpreter should handle this instruction.
+    private func dispatchNativeRoutine() -> Int? {
+        guard !nativeRoutines.isEmpty, cpu.stallCycles == 0 else { return nil }
+
+        let key = RoutineKey(bank: mapper.currentPRGBank, address: cpu.pc)
+        guard let routine = nativeRoutines[key] else { return nil }
+
+        routine.body(self)
+        cpu.returnFromSubroutine()
+        cpu.advanceCycles(routine.cycles)
+        nativeCallCounts[key, default: 0] += 1
+        return routine.cycles
     }
 
     /// Runs until the PPU signals the end of a frame.

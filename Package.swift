@@ -1,6 +1,17 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
+// One app = one game. The emulation machinery is reusable libraries; each
+// title is a small game target plus a thin app target that embeds its ROM.
+//
+//   NESCore     emulator — ships inside every game app
+//   NESAnalysis disassembly and tracing tools — development only, never shipped
+//   ZeldaGame   Zelda-specific metadata, symbol map, and decompiled routines
+//   nesrun      CLI harness for the decompilation workflow
+//
+// Adding Super Mario Bros. 3 means a new `SMB3Game` target next to `ZeldaGame`
+// plus an MMC3 mapper in NESCore — not a fork of any of this.
+
 let package = Package(
     name: "loz",
     platforms: [
@@ -10,19 +21,20 @@ let package = Package(
     ],
     products: [
         .library(name: "NESCore", targets: ["NESCore"]),
+        .library(name: "NESAnalysis", targets: ["NESAnalysis"]),
+        .library(name: "ZeldaGame", targets: ["ZeldaGame"]),
     ],
     targets: [
-        // Platform-agnostic emulator. No Foundation-heavy or UI dependencies so it
-        // drops cleanly into the iOS, tvOS, and macOS app targets alike.
         .target(
             name: "NESCore",
             swiftSettings: [
                 .unsafeFlags(["-Ounchecked"], .when(configuration: .release))
             ]
         ),
-        // macOS-only harness: boots a ROM headlessly and dumps frames to disk.
-        // This is the fast debug loop while the PPU is being brought up.
-        .executableTarget(name: "nesrun", dependencies: ["NESCore"]),
+        .target(name: "NESAnalysis", dependencies: ["NESCore"]),
+        .target(name: "ZeldaGame", dependencies: ["NESCore"]),
+        .executableTarget(name: "nesrun", dependencies: ["NESCore", "NESAnalysis", "ZeldaGame"]),
         .testTarget(name: "NESCoreTests", dependencies: ["NESCore"]),
+        .testTarget(name: "NESAnalysisTests", dependencies: ["NESAnalysis", "NESCore"]),
     ]
 )

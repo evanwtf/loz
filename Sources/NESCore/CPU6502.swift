@@ -117,6 +117,20 @@ public final class CPU6502 {
         pendingIRQ = false
     }
 
+    /// Performs an RTS without executing one.
+    ///
+    /// After a decompiled routine runs natively, control has to rejoin the
+    /// interpreted caller exactly where the original `RTS` would have left it.
+    public func returnFromSubroutine() {
+        pc = pull16() &+ 1
+    }
+
+    /// Charges cycles for work done outside the interpreter, keeping the PPU in
+    /// step with a natively-executed routine.
+    public func advanceCycles(_ count: Int) {
+        totalCycles += count
+    }
+
     /// Latched by the PPU at the start of vblank.
     public func triggerNMI() { pendingNMI = true }
     /// Level-triggered; the APU/mapper assert and release it.

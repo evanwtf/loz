@@ -13,6 +13,28 @@ public protocol Mapper: AnyObject {
 
     /// Current mirroring; MMC1 can change this at runtime.
     var mirroring: Mirroring { get }
+
+    /// PRG bank currently visible at $8000-$BFFF.
+    ///
+    /// Decompiled routines are keyed by (bank, address) because a bare address
+    /// is ambiguous under banking, so the dispatcher needs to ask the mapper
+    /// what is mapped right now.
+    var currentPRGBank: Int { get }
+
+    /// Notification that the PPU drove a pattern-table address.
+    ///
+    /// MMC3 counts scanlines by watching A12 rise, which is how Super Mario
+    /// Bros. 3 splits its status bar. Mappers without an IRQ ignore this.
+    func ppuAddressChanged(_ address: UInt16)
+
+    /// True while the mapper is asserting the CPU's IRQ line.
+    var irqAsserted: Bool { get }
+}
+
+extension Mapper {
+    public var currentPRGBank: Int { 0 }
+    public func ppuAddressChanged(_ address: UInt16) {}
+    public var irqAsserted: Bool { false }
 }
 
 /// Mapper 0. No banking — useful as a sanity target for test ROMs.

@@ -1,4 +1,5 @@
 import Foundation
+import NESCore
 
 /// A location in PRG-ROM, identified by bank plus the CPU address it is seen at.
 /// Under MMC1 a bare CPU address is ambiguous — $8000 means eight different

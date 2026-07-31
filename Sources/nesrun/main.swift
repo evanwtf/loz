@@ -1,5 +1,7 @@
 import Foundation
 import NESCore
+import NESAnalysis
+import ZeldaGame
 
 // Minimal hand-rolled CLI; no external dependencies while the core is in flux.
 
@@ -46,6 +48,11 @@ let romPath = args[1]
 let cartridge = loadCartridge(romPath)
 
 switch command {
+
+case "hash":
+    // Pins a GameDefinition to an exact dump.
+    let data = try! Data(contentsOf: URL(fileURLWithPath: romPath))
+    print(ROMHash.hex(of: [UInt8](data)))
 
 case "info":
     print(cartridge.summary)

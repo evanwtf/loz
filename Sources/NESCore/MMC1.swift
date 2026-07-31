@@ -38,6 +38,16 @@ public final class MMC1: Mapper {
     /// On SNROM, bit 4 of the PRG bank register disables WRAM.
     private var prgRAMEnabled: Bool { (prgBank & 0x10) == 0 }
 
+    public var currentPRGBank: Int {
+        let bankCount = cartridge.prgBankCount16K
+        let selected = Int(prgBank & 0x0F) % bankCount
+        switch prgMode {
+        case 0, 1: return selected & ~1     // 32KB mode: $8000 holds the even bank
+        case 2:    return 0                 // first bank fixed at $8000
+        default:   return selected          // Zelda's mode: switchable at $8000
+        }
+    }
+
     // MARK: CPU
 
     public func cpuRead(_ address: UInt16) -> UInt8? {
