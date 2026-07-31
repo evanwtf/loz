@@ -51,7 +51,10 @@ jobs:
           if ! command -v swiftformat >/dev/null 2>&1; then
             brew install swiftformat
           fi
-          swiftformat --version
+          # Printed so a lint failure caused by a tool upgrade introducing new
+          # rules is obvious from the log rather than looking like a code
+          # regression — which is exactly what happened the first time this ran.
+          echo "swiftformat $(swiftformat --version)"
 
       - name: Lint
         run: swiftformat Sources Tests --lint --cache ignore

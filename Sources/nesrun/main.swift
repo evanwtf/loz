@@ -114,7 +114,7 @@ case "analyze":
         let base = bank * 0x4000
         let bankCode = (base..<base + 0x4000).count { analysis.codeBytes.contains($0) }
         let bankPct = Double(bankCode) / Double(0x4000) * 100
-        let routines = analysis.routines.filter { $0.bank == bank }.count
+        let routines = analysis.routines.count { $0.bank == bank }
         let bar = String(repeating: "#", count: Int(bankPct / 4))
         print(String(format: "  bank %d: %5.1f%% code  %3d routines  %@",
                      bank, bankPct, routines, bar))
@@ -399,7 +399,7 @@ case "audio":
     // rather than silence or a DC offset.
     let peak = samples.map(abs).max() ?? 0
     let rms = (samples.reduce(0) { $0 + Double($1 * $1) } / Double(max(samples.count, 1))).squareRoot()
-    let crossings = zip(samples, samples.dropFirst()).filter { ($0 < 0) != ($1 < 0) }.count
+    let crossings = zip(samples, samples.dropFirst()).count { ($0 < 0) != ($1 < 0) }
     print(String(format: """
                  Rendered %.1fs — %d samples at %.0f Hz
                    peak amplitude:  %.4f
