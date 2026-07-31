@@ -29,7 +29,7 @@ reproducible without redistributing anything from the cartridge.
 
 ## Commands
 
-All twelve take the ROM path as their second argument. `nesrun` with no
+All fourteen take the ROM path as their second argument. `nesrun` with no
 arguments prints the full flag list for each.
 
 | Command | Purpose |
@@ -44,8 +44,42 @@ arguments prints the full flag list for each.
 | `navigate --to XX` | Pathfind to an overworld screen |
 | `mapcheck` | Score a rendered screen against the reference map |
 | `audio --seconds N` | Render the APU to a WAV with signal statistics |
+| `clearroom` | Fight the current room empty, then collect the drop |
+| `oam` | List the actors on screen — Link, enemies, items — with positions |
 | `paltrace` | Log every write reaching palette memory |
 | `embed` | Emit the ROM as Swift source ([rom-free.md](rom-free.md)) |
+
+## Fighting: a loop, not a script
+
+A replayed script works for walking across static geometry and fails
+immediately in combat, because enemies move. Standing in a corner swinging
+killed one Keese and then waited out ninety swings while the other two drifted
+to the far wall; a fixed script has no way to notice that.
+
+`clearroom` closes the loop. Every eight frames it reads OAM, walks at the
+nearest actor, and swings when in range:
+
+```sh
+swift run -c release nesrun clearroom zelda.nes \
+  --load-state /tmp/r72.state --input "left:40" --save-state /tmp/cleared.state
+# CLEARED in 252 frames, 5 swings, 24 pickups, 0 enemies left  screen $72
+```
+
+Compare that with the blind version: 90 swings for one kill, and a second
+attempt that got Link killed.
+
+Two distinctions the loop depends on, both learned the hard way:
+
+- **Status bar sprites are not actors.** Hearts and item icons live above the
+  playfield and were being targeted as enemies.
+- **One sprite is an item, two is an enemy.** Zelda runs the PPU in 8x16 sprite
+  mode, so actors are sprite pairs and floor pickups are singles. Before that
+  distinction existed, a dropped key counted as an enemy that would not die:
+  552 swings and 6000 frames spent attacking something Link only had to stand
+  on.
+
+`oam` prints the same classification as a one-off, which is the fastest way to
+answer "what is actually on this screen" without a screenshot.
 
 ## Probing: many guesses, one process
 
@@ -103,13 +137,39 @@ Two things this had to solve, both non-obvious:
 The same sweep trick is what gets Link through dungeon doorways, which sit at
 fixed positions in each wall.
 
-## Known route to Level 1
+## Committed routes
 
+Routes are expensive to derive and trivial to lose, so they live in
+`docs/scripts/` as input scripts rather than as snapshots. Each one chains from
+the previous, carries a `#` header saying what it starts from and which RAM
+address proves it worked, and can be replayed from a clean checkout:
+
+```sh
+nesrun play zelda.nes --input "$(cat docs/scripts/boot-to-overworld.txt)" \
+  --save-state /tmp/ow.state
+nesrun play zelda.nes --load-state /tmp/ow.state \
+  --input "$(cat docs/scripts/sword.txt)" --save-state /tmp/sword.state
+nesrun play zelda.nes --load-state /tmp/sword.state \
+  --input "$(cat docs/scripts/to-level1.txt)" --save-state /tmp/level1.state
 ```
-$77 start -> $78 -> $58 -> $48 -> $28 -> $38
-$38 is water with one narrow bridge: down:100, then left:300 reaches $37
-$37 is the Level 1 entrance: right:12, up:140 goes in
-```
+
+| Script | Achieves | Proof |
+|---|---|---|
+| `boot-to-overworld.txt` | Past the title and registration to screen `$77` | `$00EB = 77` |
+| `sword.txt` | The wooden sword from the cave on the starting screen | `$0657 = 01` |
+| `to-level1.txt` | Overworld to Level 1, and in through the door | `$00EB = 73` |
+
+Three things these routes had to work around:
+
+- **Caves do not change `$00EB`.** It stays `$77` through the whole sword
+  detour, so the item byte is the only proof anything happened.
+- **Link is often boxed in by bushes**, and a blocked sideways move looks
+  nothing like an overshoot: every candidate in a sweep returns the *identical*
+  end position. Step up first, then sideways.
+- **Settle frames before snapshotting are load-bearing.** `$00EB` updates
+  during the scroll, so a state captured immediately after a screen change
+  records the previous screen. A snapshot that claimed `$38` behaved like `$48`
+  until `wait:90` was added.
 
 Inside a dungeon, `$00EB` becomes the room number instead of the overworld
 screen. Level 1's entrance room is `$73`.

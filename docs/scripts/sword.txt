@@ -15,4 +15,10 @@ wait:260,            # the old man's text locks input until it finishes typing
 right:6,             # line up with the sword (x $78); at x $70 he walks past it
 up:70,               # touch the sword -> $0657 = 01
 wait:60,
-down:150             # back out of the cave onto the overworld
+down:150,            # back out of the cave onto the overworld
+down:100,right:60    # step clear of the cave mouth into open sand
+
+# Ending in the cave mouth looks fine in a screenshot but leaves Link somewhere
+# no route can start from: `navigate` explored $77 and found zero neighbours,
+# because walking up just re-enters the cave and the other directions are rock.
+# Scripts should end somewhere the next one can move from.

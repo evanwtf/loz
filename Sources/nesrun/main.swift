@@ -50,7 +50,22 @@ func usage() -> Never {
                --save-state <file>  Write the arrival state.
                --verbose            Report each screen as it is explored.
     
+      clearroom Fight everything in the current room until it is empty, then
+               collect what dropped. Closed loop over OAM, not a fixed script:
+               enemies move, so a replayed script cannot follow them.
+               --load-state <file>  Snapshot to start from (required).
+               --input <script>     Input to run first, e.g. to step in a door.
+               --max-frames <n>     Give-up limit (default 3600).
+               --save-state <file>  Write the state once the room is clear.
+               --out <file.png>     Screenshot the result.
+               --verbose            Report every decision the loop makes.
+    
     VERIFICATION:
+      oam      List the actors the PPU is drawing — Link, enemies, and items —
+               with positions. What is on screen, not what the map says.
+               --load-state <file>  Snapshot to inspect.
+               --input <script>     Input to run first.
+               --settle <n>         Frames before reading (default 30).
       mapcheck Correlate the rendered screen against the reference overworld
                map. Turns "does it look right" into a number.
                --load-state <file>  Snapshot to check (required).
@@ -571,6 +586,60 @@ case "audio":
                  """, seconds, samples.count, sampleRate, peak, rms, crossings,
                  Double(crossings) / 2.0 / seconds))
     print("Wrote \(outPath)")
+
+case "oam":
+    // What is actually on screen, as opposed to what the room layout says.
+    let nes = try! NES(cartridge: cartridge)
+    if let statePath = flag("--load-state", in: args) {
+        let data = try! Data(contentsOf: URL(fileURLWithPath: statePath))
+        try! nes.restoreState(try! JSONDecoder().decode(SaveState.self, from: data))
+    }
+    runInputScript(nes, script: flag("--input", in: args), filmstrip: nil, every: 0, scale: 1)
+    for _ in 0..<(Int(flag("--settle", in: args) ?? "30") ?? 30) { nes.stepFrame() }
+
+    print(String(format: "screen $%02X", nes.cpuRead(Navigator.screenAddress)))
+    print(Entities.report(
+        oam: nes.ppu.oam,
+        linkX: Int(nes.cpuRead(0x0070)),
+        linkY: Int(nes.cpuRead(0x0084))))
+
+case "clearroom":
+    // Closed loop: read OAM, walk at the nearest actor, swing when close.
+    guard let statePath = flag("--load-state", in: args) else {
+        FileHandle.standardError.write(
+            "error: clearroom needs --load-state\n".data(using: .utf8)!)
+        exit(1)
+    }
+    let nes = try! NES(cartridge: cartridge)
+    let data = try! Data(contentsOf: URL(fileURLWithPath: statePath))
+    try! nes.restoreState(try! JSONDecoder().decode(SaveState.self, from: data))
+
+    if let input = flag("--input", in: args) {
+        runInputScript(nes, script: input, filmstrip: nil, every: 0, scale: 1)
+        for _ in 0..<60 { nes.stepFrame() }
+    }
+
+    let outcome = ClearRoom.run(
+        nes: nes,
+        maxFrames: Int(flag("--max-frames", in: args) ?? "3600") ?? 3600,
+        verbose: args.contains("--verbose"))
+
+    let verdict = outcome.died ? "DIED" : (outcome.cleared ? "CLEARED" : "TIMED OUT")
+    print(String(
+        format: "%@ in %d frames, %d swings, %d pickups, %d enemies left  screen $%02X  health $%02X",
+        verdict, outcome.frames, outcome.swings, outcome.pickups, outcome.remaining,
+        nes.cpuRead(Navigator.screenAddress), nes.cpuRead(0x066F)))
+
+    if let outPath = flag("--out", in: args) {
+        writePNG(nes.framebuffer, to: outPath, scale: Int(flag("--scale", in: args) ?? "3") ?? 3)
+        print("Wrote \(outPath)")
+    }
+    if let savePath = flag("--save-state", in: args) {
+        try! JSONEncoder().encode(nes.captureState())
+            .write(to: URL(fileURLWithPath: savePath))
+        print("Saved state to \(savePath)")
+    }
+    if !outcome.cleared { exit(1) }
 
 case "paltrace":
     // Diagnostic: log every write that reaches palette memory, so a transfer

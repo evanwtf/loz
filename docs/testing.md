@@ -1,6 +1,6 @@
 # Testing
 
-170 tests across 15 suites, using swift-testing. `swift test` runs in ~1.2s, so
+180 tests across 16 suites, using swift-testing. `swift test` runs in ~1.2s, so
 there is no excuse for not running it.
 
 ## Philosophy
@@ -16,7 +16,7 @@ timing.
 
 ## Suites
 
-Fifteen suites across fourteen files — `APUTests.swift` declares three.
+Sixteen suites across fifteen files — `APUTests.swift` declares three.
 
 ### `NESCoreTests` — the emulator (143)
 
@@ -34,6 +34,17 @@ Fifteen suites across fourteen files — `APUTests.swift` declares three.
 | `APU integration` | 7 | Mixing, DC blocking, the sample buffer |
 | `Save states` | 6 | Round-trip fidelity; restored machines stay in lockstep |
 | `Native routine dispatch` | 6 | Native dispatch replaces interpretation transparently |
+
+### `NESAnalysisTests` — the dev-only tooling (10)
+
+| Suite | Tests | Guards |
+|---|---|---|
+| `OAM entity reading` | 10 | Sprite decode, clustering into actors, item vs enemy |
+
+Every case in that suite is a mistake the harness actually made. Reading OAM
+looks trivial and is not: status bar sprites became phantom targets, and a
+dropped key classified as an enemy cost 552 sword swings against an item that
+only had to be walked onto.
 
 ### `NESPlayerTests` — the app shell (20)
 
