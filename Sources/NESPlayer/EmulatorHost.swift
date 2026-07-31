@@ -31,6 +31,13 @@ public final class EmulatorHost: ObservableObject {
     private var lastFPSSample = CFAbsoluteTimeGetCurrent()
     private var framesSinceSample = 0
 
+    private let audio: AudioOutput
+    /// Muting stops audio reaching the speaker but keeps the APU running, so
+    /// unmuting resumes mid-phrase rather than restarting a note.
+    @Published public var isMuted = false {
+        didSet { isMuted ? audio.stop() : audio.start() }
+    }
+
     private let saveURL: URL?
     private var framesSinceSaveCheck = 0
 
@@ -48,7 +55,9 @@ public final class EmulatorHost: ObservableObject {
         let cartridge = try Cartridge(data: romData)
         try G.validate(romData: romData, cartridge: cartridge)
 
-        self.nes = try NES(cartridge: cartridge)
+        let sampleRate = 44100.0
+        self.audio = AudioOutput(sampleRate: sampleRate)
+        self.nes = try NES(cartridge: cartridge, sampleRate: sampleRate)
         self.nes.nativeRoutines = G.nativeRoutines
         self.title = G.title
         self.saveURL = cartridge.hasBattery ? saveURL : nil
@@ -62,11 +71,13 @@ public final class EmulatorHost: ObservableObject {
         let link = Self.makeDisplayLink(target: self, selector: #selector(tick))
         link?.add(to: .main, forMode: .common)
         displayLink = link
+        if !isMuted { audio.start() }
     }
 
     public func stop() {
         displayLink?.invalidate()
         displayLink = nil
+        audio.stop()
         saveBatterySave()
     }
 
@@ -86,6 +97,7 @@ public final class EmulatorHost: ObservableObject {
 
         for _ in 0..<max(1, speedMultiplier) {
             nes.stepFrame()
+            drainAudio()
         }
         renderCurrentFrame()
 
@@ -109,6 +121,17 @@ public final class EmulatorHost: ObservableObject {
 
     private func renderCurrentFrame() {
         frame = FrameRenderer.image(from: nes.framebuffer)
+    }
+
+    private func drainAudio() {
+        let ready = nes.apu.availableSamples
+        guard ready > 0 else { return }
+        let samples = nes.apu.drain(count: ready)
+        // While fast-forwarding, the APU generates several frames' worth of
+        // audio per display frame. Playing it all would sound like chipmunks
+        // and overflow the queue, so drop it and keep the picture responsive.
+        guard !isMuted, speedMultiplier == 1 else { return }
+        audio.enqueue(samples)
     }
 
     // MARK: Input
