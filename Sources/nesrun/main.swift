@@ -1,9 +1,9 @@
-import Foundation
 import CoreGraphics
+import Foundation
 import ImageIO
-import UniformTypeIdentifiers
-import NESCore
 import NESAnalysis
+import NESCore
+import UniformTypeIdentifiers
 import ZeldaGame
 
 // Minimal hand-rolled CLI; no external dependencies while the core is in flux.
@@ -11,14 +11,14 @@ import ZeldaGame
 func usage() -> Never {
     print("""
     nesrun — decompilation harness for the loz project
-
+    
     USAGE:
       nesrun info    <rom.nes>
       nesrun analyze <rom.nes>
       nesrun disasm  <rom.nes> --bank <n> [--out <file.asm>]
       nesrun run     <rom.nes> [--frames <n>] [--out <frame.ppm>]
       nesrun play    <rom.nes> [options]
-
+    
     COMMANDS:
       info     Parse the iNES header and print cartridge geometry.
       analyze  Recursive-descent trace from the interrupt vectors; reports
@@ -27,7 +27,7 @@ func usage() -> Never {
       run      Boot the ROM headlessly for N frames and dump the framebuffer.
       play     Drive the game with a scripted input sequence. Designed to be
                run by an agent: no window, PNG output, resumable snapshots.
-
+    
     PLAY OPTIONS:
       --input <script>     Input sequence, e.g. "wait:60,start:4,up+a:12".
                            Buttons: up down left right a b start select wait.
@@ -68,7 +68,6 @@ let romPath = args[1]
 let cartridge = loadCartridge(romPath)
 
 switch command {
-
 case "hash":
     // Pins a GameDefinition to an exact dump.
     let data = try! Data(contentsOf: URL(fileURLWithPath: romPath))
@@ -123,7 +122,7 @@ case "analyze":
 
 case "disasm":
     guard let bankArg = flag("--bank", in: args), let bank = Int(bankArg) else { usage() }
-    guard bank >= 0 && bank < cartridge.prgBankCount16K else {
+    guard bank >= 0, bank < cartridge.prgBankCount16K else {
         FileHandle.standardError.write(
             "error: bank must be 0..\(cartridge.prgBankCount16K - 1)\n".data(using: .utf8)!)
         exit(1)
@@ -260,7 +259,8 @@ case "play":
         // Merge earlier sessions so coverage accumulates across many short
         // exploration runs rather than restarting each time.
         if let inPath = flag("--trace-in", in: args),
-           let previous = try? ExecutionTrace.read(from: URL(fileURLWithPath: inPath)) {
+           let previous = try? ExecutionTrace.read(from: URL(fileURLWithPath: inPath))
+        {
             let before = trace.executedOffsets.count
             trace.merge(previous)
             print("Merged \(inPath): \(before) -> \(trace.executedOffsets.count) bytes\n")
@@ -322,7 +322,6 @@ case "navigate":
         print("  \(index + 1). \(step)")
     }
     
-
     if let outPath = flag("--save-state", in: args) {
         try! JSONEncoder().encode(found.state).write(to: URL(fileURLWithPath: outPath))
         print("\nSaved arrival state to \(outPath)")
@@ -402,12 +401,12 @@ case "audio":
     let rms = (samples.reduce(0) { $0 + Double($1 * $1) } / Double(max(samples.count, 1))).squareRoot()
     let crossings = zip(samples, samples.dropFirst()).filter { ($0 < 0) != ($1 < 0) }.count
     print(String(format: """
-        Rendered %.1fs — %d samples at %.0f Hz
-          peak amplitude:  %.4f
-          RMS:             %.4f
-          zero crossings:  %d  (~%.0f Hz average)
-        """, seconds, samples.count, sampleRate, peak, rms, crossings,
-        Double(crossings) / 2.0 / seconds))
+                 Rendered %.1fs — %d samples at %.0f Hz
+                   peak amplitude:  %.4f
+                   RMS:             %.4f
+                   zero crossings:  %d  (~%.0f Hz average)
+                 """, seconds, samples.count, sampleRate, peak, rms, crossings,
+                 Double(crossings) / 2.0 / seconds))
     print("Wrote \(outPath)")
 
 case "paltrace":
@@ -521,8 +520,8 @@ func writePNG(_ framebuffer: [UInt32], to path: String, scale: Int = 3) {
 
     guard let scaled = context.makeImage(),
           let destination = CGImageDestinationCreateWithURL(
-            URL(fileURLWithPath: path) as CFURL,
-            UTType.png.identifier as CFString, 1, nil)
+              URL(fileURLWithPath: path) as CFURL,
+              UTType.png.identifier as CFString, 1, nil)
     else { return }
 
     CGImageDestinationAddImage(destination, scaled, nil)

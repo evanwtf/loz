@@ -18,7 +18,6 @@ public struct NESButton: OptionSet, Sendable {
 /// Software strobes bit 0 of $4016 high then low to latch the button state,
 /// then reads $4016 eight times to clock the bits out one at a time.
 public final class Controller {
-
     /// Live button state, driven by the host's input layer.
     public private(set) var buttons: NESButton = []
 
@@ -32,6 +31,7 @@ public final class Controller {
     public func set(_ b: NESButton, pressed: Bool) {
         if pressed { press(b) } else { release(b) }
     }
+
     public func releaseAll() { buttons = [] }
 
     /// CPU write to $4016.

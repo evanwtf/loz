@@ -1,13 +1,12 @@
 import Foundation
-import Testing
 @testable import NESCore
+import Testing
 
 /// Save states must restore the machine *exactly*. A snapshot that is subtly
 /// wrong produces a game that looks fine and then desynchronises later, which
 /// is far worse than one that fails loudly.
 @Suite("Save states")
 struct SaveStateTests {
-
     /// A cartridge with CHR-RAM and battery RAM, so the snapshot has to carry
     /// both — matching Zelda's board.
     private func makeNES() throws -> NES {
@@ -21,7 +20,7 @@ struct SaveStateTests {
         prg[0x0002] = 0x4C; prg[0x0003] = 0x00; prg[0x0004] = 0x80
         prg[0x7FFC] = 0x00; prg[0x7FFD] = 0x80
 
-        return try NES(cartridge: try Cartridge(data: header + prg))
+        return try NES(cartridge: Cartridge(data: header + prg))
     }
 
     @Test("Capture and restore round-trips the full machine")
@@ -138,7 +137,7 @@ struct SaveStateTests {
         for bank in 0..<8 { prg[bank * 0x4000] = UInt8(0xB0 + bank) }
         prg[0x1FFFC] = 0x00; prg[0x1FFFD] = 0x80
 
-        let nes = try NES(cartridge: try Cartridge(data: header + prg))
+        let nes = try NES(cartridge: Cartridge(data: header + prg))
 
         // Serially shift bank 3 into the PRG bank register at $E000.
         for bit in 0..<5 {

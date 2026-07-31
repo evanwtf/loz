@@ -1,11 +1,10 @@
-import Testing
 @testable import NESCore
+import Testing
 
 /// Branches, subroutines, the stack, and interrupt dispatch — the machinery the
 /// decompiler has to reason about when recovering control flow.
 @Suite("CPU: control flow, stack, interrupts")
 struct CPUControlFlowTests {
-
     // MARK: Branches
 
     @Test("A not-taken branch costs 2 cycles and falls through")

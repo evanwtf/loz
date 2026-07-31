@@ -1,11 +1,10 @@
-import Testing
 @testable import NESCore
+import Testing
 
 /// Addressing-mode semantics, with emphasis on the wrapping and page-crossing
 /// edge cases that quietly corrupt a decompilation if they are wrong.
 @Suite("CPU: addressing modes")
 struct CPUAddressingTests {
-
     @Test("Zero page")
     func zeroPage() {
         let f = CPUFixture([0xA5, 0x42])          // LDA $42

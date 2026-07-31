@@ -1,11 +1,11 @@
-import Foundation
-import CoreGraphics
-import QuartzCore
 import Combine
+import CoreGraphics
+import Foundation
 import NESCore
+import QuartzCore
 
 #if canImport(AppKit)
-import AppKit
+    import AppKit
 #endif
 
 /// Drives one game: clocks the emulator at display refresh, publishes frames,
@@ -16,7 +16,6 @@ import AppKit
 /// races that come with it.
 @MainActor
 public final class EmulatorHost: ObservableObject {
-
     public let nes: NES
     public let title: String
     /// Identifies the exact dump in use, so save states cannot be loaded into
@@ -53,7 +52,7 @@ public final class EmulatorHost: ObservableObject {
     ///   - romData: raw iNES image, validated against the game's expected hash.
     ///   - saveURL: where battery-backed RAM is persisted, if the cart has any.
     public init<G: GameDefinition>(
-        game: G.Type,
+        game _: G.Type,
         romData: [UInt8],
         saveURL: URL? = nil
     ) throws {
@@ -61,14 +60,14 @@ public final class EmulatorHost: ObservableObject {
         try G.validate(romData: romData, cartridge: cartridge)
 
         let sampleRate = 44100.0
-        self.audio = AudioOutput(sampleRate: sampleRate)
-        self.nes = try NES(cartridge: cartridge, sampleRate: sampleRate)
-        self.nes.nativeRoutines = G.nativeRoutines
-        self.title = G.title
-        self.romHash = G.expectedROMHash
-        self.gameName = G.romResourceName
+        audio = AudioOutput(sampleRate: sampleRate)
+        nes = try NES(cartridge: cartridge, sampleRate: sampleRate)
+        nes.nativeRoutines = G.nativeRoutines
+        title = G.title
+        romHash = G.expectedROMHash
+        gameName = G.romResourceName
         self.saveURL = cartridge.hasBattery ? saveURL : nil
-        self.isMuted = LaunchOptions.startMuted
+        isMuted = LaunchOptions.startMuted
 
         loadBatterySave()
         renderCurrentFrame()

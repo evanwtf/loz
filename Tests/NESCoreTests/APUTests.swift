@@ -1,11 +1,10 @@
-import Testing
 @testable import NESCore
+import Testing
 
 /// APU component semantics. Wrong envelopes or length counters are audible but
 /// nearly impossible to attribute by ear, so they are pinned down directly.
 @Suite("APU components")
 struct APUComponentTests {
-
     // MARK: Length counter
 
     @Test("Length counter loads from the hardware table")
@@ -190,7 +189,6 @@ struct APUComponentTests {
 
 @Suite("APU channels")
 struct APUChannelTests {
-
     @Test("Pulse duty sequences match the hardware waveforms")
     func dutyTable() {
         #expect(PulseChannel.dutyTable[0] == [0, 1, 0, 0, 0, 0, 0, 0])
@@ -287,7 +285,7 @@ struct APUChannelTests {
 
         var highCount = 0
         var lowCount = 0
-        for _ in 0..<20_000 {
+        for _ in 0..<20000 {
             noise.clockTimer()
             noise.clockTimer()
             if noise.output > 0 { highCount += 1 } else { lowCount += 1 }
@@ -324,7 +322,6 @@ struct APUChannelTests {
 
 @Suite("APU integration")
 struct APUIntegrationTests {
-
     private func makeAPU() -> APU {
         let apu = APU(sampleRate: 44100)
         apu.readMemory = { _ in 0 }
@@ -369,7 +366,7 @@ struct APUIntegrationTests {
         // Run well past the DC blocker's ~45 ms time constant, draining as we
         // go so the ring buffer never overflows and drops the tail.
         for _ in 0..<20 {
-            for _ in 0..<50_000 { apu.step() }
+            for _ in 0..<50000 { apu.step() }
             let ready = apu.availableSamples
             if ready > 0 { latest = apu.drain(count: ready) }
         }
@@ -400,12 +397,12 @@ struct APUIntegrationTests {
     func frameIRQ() {
         let fourStep = makeAPU()
         fourStep.writeRegister(0x4017, 0x00)     // 4-step, IRQ enabled
-        for _ in 0..<30_000 { fourStep.step() }
+        for _ in 0..<30000 { fourStep.step() }
         #expect(fourStep.irqAsserted)
 
         let fiveStep = makeAPU()
         fiveStep.writeRegister(0x4017, 0x80)     // 5-step, no IRQ
-        for _ in 0..<40_000 { fiveStep.step() }
+        for _ in 0..<40000 { fiveStep.step() }
         #expect(!fiveStep.irqAsserted)
     }
 
@@ -413,7 +410,7 @@ struct APUIntegrationTests {
     func statusReadClearsIRQ() {
         let apu = makeAPU()
         apu.writeRegister(0x4017, 0x00)
-        for _ in 0..<30_000 { apu.step() }
+        for _ in 0..<30000 { apu.step() }
         #expect(apu.irqAsserted)
         _ = apu.readStatus()
         #expect(!apu.irqAsserted)
@@ -423,7 +420,7 @@ struct APUIntegrationTests {
     func inhibitIRQ() {
         let apu = makeAPU()
         apu.writeRegister(0x4017, 0x40)          // 4-step, IRQ inhibited
-        for _ in 0..<40_000 { apu.step() }
+        for _ in 0..<40000 { apu.step() }
         #expect(!apu.irqAsserted)
     }
 }

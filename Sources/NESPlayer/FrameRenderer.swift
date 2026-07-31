@@ -7,7 +7,6 @@ import Foundation
 /// machine is the byte order R,G,B,A — exactly what `noneSkipLast` expects, so
 /// the buffer uploads with no per-pixel conversion.
 public enum FrameRenderer {
-
     public static let width = 256
     public static let height = 240
 

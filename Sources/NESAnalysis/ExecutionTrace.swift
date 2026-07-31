@@ -12,7 +12,6 @@ import NESCore
 /// So playing the game *is* the discovery mechanism. Walk into a dungeon and
 /// the dungeon's code reveals itself, correctly attributed to its bank.
 public struct ExecutionTrace: Codable, Sendable {
-
     /// Flat PRG offsets that began an executed instruction.
     public var executedOffsets: Set<Int> = []
 
@@ -59,7 +58,6 @@ public struct ExecutionTrace: Codable, Sendable {
 /// than a Set because this runs on every instruction — several million times a
 /// second — and set hashing would dominate the emulator's own cost.
 public final class ExecutionTracer {
-
     private let prgROM: [UInt8]
     private let bankCount: Int
     private let lastBank: Int
@@ -76,10 +74,10 @@ public final class ExecutionTracer {
     private var pendingDispatchSite: BankedAddress?
 
     public init(cartridge: Cartridge) {
-        self.prgROM = cartridge.prgROM
-        self.bankCount = cartridge.prgBankCount16K
-        self.lastBank = cartridge.prgBankCount16K - 1
-        self.covered = [UInt8](repeating: 0, count: cartridge.prgROM.count)
+        prgROM = cartridge.prgROM
+        bankCount = cartridge.prgBankCount16K
+        lastBank = cartridge.prgBankCount16K - 1
+        covered = [UInt8](repeating: 0, count: cartridge.prgROM.count)
     }
 
     /// Folds (bank, PC) to a flat PRG offset the same way the static analyzer
@@ -87,9 +85,9 @@ public final class ExecutionTracer {
     @inline(__always)
     private func flatOffset(bank: Int, pc: UInt16) -> Int? {
         switch pc {
-        case 0x8000...0xBFFF: return bank * 0x4000 + Int(pc - 0x8000)
-        case 0xC000...0xFFFF: return lastBank * 0x4000 + Int(pc - 0xC000)
-        default: return nil     // RAM-resident code; not a ROM offset
+        case 0x8000...0xBFFF: bank * 0x4000 + Int(pc - 0x8000)
+        case 0xC000...0xFFFF: lastBank * 0x4000 + Int(pc - 0xC000)
+        default: nil     // RAM-resident code; not a ROM offset
         }
     }
 
@@ -153,11 +151,10 @@ public final class ExecutionTracer {
 
 // MARK: - Reporting
 
-extension ExecutionTrace {
-
+public extension ExecutionTrace {
     /// Compares this trace against a purely static analysis and describes what
     /// running the game revealed.
-    public func report(cartridge: Cartridge, static staticAnalysis: ROMAnalyzer.Analysis) -> String {
+    func report(cartridge: Cartridge, static staticAnalysis: ROMAnalyzer.Analysis) -> String {
         let total = cartridge.prgROM.count
         let staticBytes = staticAnalysis.codeBytes
         let dynamicBytes = executedOffsets
@@ -205,7 +202,7 @@ extension ExecutionTrace {
         lines.append("")
         lines.append("Per-bank coverage  (static -> combined)")
         for bank in 0..<cartridge.prgBankCount16K {
-            let range = bank * 0x4000 ..< (bank + 1) * 0x4000
+            let range = bank * 0x4000..<(bank + 1) * 0x4000
             let staticCount = range.count { staticBytes.contains($0) }
             let combinedCount = range.count { combined.contains($0) }
             let staticPercent = Double(staticCount) / Double(0x4000) * 100

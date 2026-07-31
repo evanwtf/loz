@@ -4,7 +4,6 @@
 /// there is no single "correct" table. These are the widely-used 2C02 values
 /// that match what most people remember seeing on a CRT.
 public enum NESPalette {
-
     /// Packed as 0xAABBGGRR — little-endian byte order R,G,B,A, which uploads
     /// directly to a Metal `.rgba8Unorm` texture with no swizzling.
     public static let rgba: [UInt32] = colors.map { r, g, b in

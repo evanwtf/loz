@@ -6,7 +6,6 @@
 /// commits it to whichever of the four control registers the *final* address
 /// selects. Writing a value with bit 7 set resets the shift register instead.
 public final class MMC1: Mapper {
-
     private let cartridge: Cartridge
 
     private var shiftRegister: UInt8 = 0x10   // bit 4 set = "empty" sentinel
@@ -23,10 +22,10 @@ public final class MMC1: Mapper {
 
     public var mirroring: Mirroring {
         switch control & 0x03 {
-        case 0:  return .singleScreenLow
-        case 1:  return .singleScreenHigh
-        case 2:  return .vertical
-        default: return .horizontal
+        case 0:  .singleScreenLow
+        case 1:  .singleScreenHigh
+        case 2:  .vertical
+        default: .horizontal
         }
     }
 

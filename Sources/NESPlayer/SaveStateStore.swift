@@ -1,8 +1,8 @@
-import Foundation
 import CoreGraphics
+import Foundation
 import ImageIO
-import UniformTypeIdentifiers
 import NESCore
+import UniformTypeIdentifiers
 
 /// Numbered save-state slots on disk, each with a thumbnail.
 ///
@@ -12,7 +12,6 @@ import NESCore
 /// 1986 game bearable on a phone during a commute.
 @MainActor
 public final class SaveStateStore: ObservableObject {
-
     public struct Slot: Identifiable, Sendable {
         public let index: Int
         public var savedAt: Date?
@@ -38,7 +37,7 @@ public final class SaveStateStore: ObservableObject {
             appropriateFor: nil,
             create: true)
 
-        self.directory = base?
+        directory = base?
             .appendingPathComponent("loz", isDirectory: true)
             .appendingPathComponent("states", isDirectory: true)
             .appendingPathComponent(gameName, isDirectory: true)
@@ -48,7 +47,7 @@ public final class SaveStateStore: ObservableObject {
                 at: directory, withIntermediateDirectories: true)
         }
 
-        self.slots = (0..<Self.slotCount).map { Slot(index: $0) }
+        slots = (0..<Self.slotCount).map { Slot(index: $0) }
         refresh()
     }
 
@@ -68,7 +67,7 @@ public final class SaveStateStore: ObservableObject {
         for index in 0..<Self.slotCount {
             guard let url = stateURL(index),
                   let attributes = try? FileManager.default.attributesOfItem(
-                    atPath: url.path),
+                      atPath: url.path),
                   let modified = attributes[.modificationDate] as? Date
             else {
                 slots[index] = Slot(index: index)
@@ -132,7 +131,7 @@ public final class SaveStateStore: ObservableObject {
     private func writeThumbnail(_ image: CGImage, to index: Int) {
         guard let url = thumbnailURL(index),
               let destination = CGImageDestinationCreateWithURL(
-                url as CFURL, UTType.png.identifier as CFString, 1, nil)
+                  url as CFURL, UTType.png.identifier as CFString, 1, nil)
         else { return }
         CGImageDestinationAddImage(destination, image, nil)
         CGImageDestinationFinalize(destination)

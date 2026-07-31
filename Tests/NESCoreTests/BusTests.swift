@@ -1,11 +1,10 @@
-import Testing
 @testable import NESCore
+import Testing
 
 /// CPU address-space decoding: RAM mirroring, PPU register mirroring, IO, and
 /// cartridge routing.
 @Suite("System bus")
 struct BusTests {
-
     /// A minimal NROM cartridge so bus tests do not depend on MMC1 banking.
     private func makeNES(prgSize: Int = 0x8000) -> NES {
         var rom: [UInt8] = Array("NES\u{1A}".utf8)

@@ -1,6 +1,6 @@
 import AppKit
-import SwiftUI
 import NESPlayer
+import SwiftUI
 import ZeldaGame
 
 // A macOS build that runs straight from SwiftPM — `swift run zeldamac` — with
@@ -33,14 +33,14 @@ if arguments.contains("--selftest") {
             let audioRatio = Double(produced) / Double(expectedSamples)
 
             print("""
-                self-test: \(Zelda.title)
-                  frames rendered:   \(frames) in \(String(format: "%.2f", elapsed))s \
-                (\(String(format: "%.0f", Double(frames) / elapsed)) fps headroom)
-                  framebuffer image: \(host.frame != nil ? "present" : "MISSING")
-                  distinct colours:  \(distinctColours)
-                  audio produced:    \(produced) / \(expectedSamples) expected \
-                (\(String(format: "%.1f%%", audioRatio * 100)))
-                """)
+            self-test: \(Zelda.title)
+              frames rendered:   \(frames) in \(String(format: "%.2f", elapsed))s \
+            (\(String(format: "%.0f", Double(frames) / elapsed)) fps headroom)
+              framebuffer image: \(host.frame != nil ? "present" : "MISSING")
+              distinct colours:  \(distinctColours)
+              audio produced:    \(produced) / \(expectedSamples) expected \
+            (\(String(format: "%.1f%%", audioRatio * 100)))
+            """)
 
             let healthy = host.frame != nil
                 && distinctColours > 2
@@ -57,7 +57,7 @@ if arguments.contains("--selftest") {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var window: NSWindow?
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    func applicationDidFinishLaunching(_: Notification) {
         // 4:3 at a comfortable integer-ish scale.
         let size = NSSize(width: 768, height: 720)
 
@@ -81,7 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+    func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
         true
     }
 }

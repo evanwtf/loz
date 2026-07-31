@@ -13,7 +13,6 @@ import NESCore
 /// side, so Link has to sidestep before pushing through. The move set therefore
 /// includes "sidestep, then go", which is what makes most of the map reachable.
 enum Navigator {
-
     /// Address of the current overworld screen number.
     static let screenAddress: UInt16 = 0x00EB
     /// Health: high nibble is heart containers minus one, low nibble is full
@@ -102,7 +101,6 @@ enum Navigator {
         maxScreens: Int,
         verbose: Bool
     ) -> Node? {
-
         let moveSet = moves(crossing: framesPerMove)
         let nes = try! NES(cartridge: cartridge)
         try? nes.restoreState(start)
@@ -116,7 +114,7 @@ enum Navigator {
         var queue = [Node(screen: startScreen, state: start, route: [])]
         var explored = 0
 
-        while !queue.isEmpty && explored < maxScreens {
+        while !queue.isEmpty, explored < maxScreens {
             let node = queue.removeFirst()
             explored += 1
 

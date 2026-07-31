@@ -2,7 +2,7 @@ import Foundation
 import QuartzCore
 
 #if canImport(AppKit)
-import AppKit
+    import AppKit
 #endif
 
 /// Drives the emulator at display refresh, with a timer fallback.
@@ -20,7 +20,6 @@ import AppKit
 /// firing after having started.
 @MainActor
 final class FrameClock {
-
     private var displayLink: CADisplayLink?
     private var timer: Timer?
     private var watchdog: Timer?
@@ -91,13 +90,13 @@ final class FrameClock {
 
     private static func makeDisplayLink(target: Any, selector: Selector) -> CADisplayLink? {
         #if canImport(AppKit)
-        // Prefer the screen the app is actually on; fall back to any screen.
-        let screen = NSApplication.shared.keyWindow?.screen
-            ?? NSScreen.main
-            ?? NSScreen.screens.first
-        return screen?.displayLink(target: target, selector: selector)
+            // Prefer the screen the app is actually on; fall back to any screen.
+            let screen = NSApplication.shared.keyWindow?.screen
+                ?? NSScreen.main
+                ?? NSScreen.screens.first
+            return screen?.displayLink(target: target, selector: selector)
         #else
-        return CADisplayLink(target: target, selector: selector)
+            return CADisplayLink(target: target, selector: selector)
         #endif
     }
 }

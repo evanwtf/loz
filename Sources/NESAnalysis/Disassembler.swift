@@ -79,7 +79,6 @@ private extension String {
 /// not identified. Deliberately conservative: it only marks bytes as code when
 /// control flow demonstrably reaches them.
 public final class ROMAnalyzer {
-
     public struct Analysis {
         /// Flat PRG offsets that begin an instruction.
         public var opcodeStarts: Set<Int> = []
@@ -102,8 +101,8 @@ public final class ROMAnalyzer {
 
     public init(cartridge: Cartridge) {
         self.cartridge = cartridge
-        self.bankCount = cartridge.prgBankCount16K
-        self.lastBank = cartridge.prgBankCount16K - 1
+        bankCount = cartridge.prgBankCount16K
+        lastBank = cartridge.prgBankCount16K - 1
     }
 
     // MARK: Address mapping
@@ -113,11 +112,11 @@ public final class ROMAnalyzer {
     private func flatOffset(_ address: UInt16, contextBank: Int) -> Int? {
         switch address {
         case 0x8000...0xBFFF:
-            return contextBank * 0x4000 + Int(address - 0x8000)
+            contextBank * 0x4000 + Int(address - 0x8000)
         case 0xC000...0xFFFF:
-            return lastBank * 0x4000 + Int(address - 0xC000)
+            lastBank * 0x4000 + Int(address - 0xC000)
         default:
-            return nil
+            nil
         }
     }
 
@@ -282,7 +281,7 @@ public final class ROMAnalyzer {
                 let opcode = cartridge.prgROM[flat]
                 let insn = Opcodes[opcode]
                 let length = min(insn.length, 0x4000 - offset)
-                let bytes = Array(cartridge.prgROM[flat ..< flat + length])
+                let bytes = Array(cartridge.prgROM[flat..<flat + length])
 
                 var target: UInt16?
                 if insn.mode == .relative, bytes.count >= 2 {
@@ -313,7 +312,7 @@ public final class ROMAnalyzer {
                     run = i
                     break
                 }
-                let bytes = Array(cartridge.prgROM[base + offset ..< base + run])
+                let bytes = Array(cartridge.prgROM[base + offset..<base + run])
                 guard !bytes.isEmpty else { offset += 1; continue }
                 let hex = bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
                 lines.append("\(BankedAddress(bank: bank, address: address))  .db \(hex)")

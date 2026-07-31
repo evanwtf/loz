@@ -1,5 +1,5 @@
-import SwiftUI
 import NESCore
+import SwiftUI
 
 /// Loads a game's ROM from the app bundle and launches straight into it.
 ///
@@ -7,7 +7,6 @@ import NESCore
 /// wrong is surfaced explicitly rather than as a black screen, because the most
 /// likely failure — a missing or mismatched ROM — is invisible otherwise.
 public struct GameLauncher<G: GameDefinition>: View {
-
     private let game: G.Type
     /// Explicit ROM location. Command-line launched builds are not app bundles,
     /// so they pass a path; bundled apps leave this nil and use their resource.
@@ -34,7 +33,7 @@ public struct GameLauncher<G: GameDefinition>: View {
                     .tint(.white)
                     .task {
                         #if os(iOS)
-                        LaunchOptions.applyRequestedOrientation()
+                            LaunchOptions.applyRequestedOrientation()
                         #endif
                         load()
                     }
@@ -44,8 +43,8 @@ public struct GameLauncher<G: GameDefinition>: View {
         // over it reads as a system alert intruding rather than part of the app.
         .preferredColorScheme(.dark)
         #if os(iOS)
-        .statusBarHidden()
-        .persistentSystemOverlays(.hidden)
+            .statusBarHidden()
+            .persistentSystemOverlays(.hidden)
         #endif
     }
 
@@ -55,11 +54,11 @@ public struct GameLauncher<G: GameDefinition>: View {
 
         guard let url = romURL ?? bundled else {
             failure = """
-                Missing ROM "\(G.romResourceName).nes".
-
-                ROMs are not committed to the repository. Supply your own dump \
-                of a cartridge you own.
-                """
+            Missing ROM "\(G.romResourceName).nes".
+            
+            ROMs are not committed to the repository. Supply your own dump \
+            of a cartridge you own.
+            """
             return
         }
 

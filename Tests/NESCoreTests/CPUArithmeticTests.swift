@@ -1,11 +1,10 @@
-import Testing
 @testable import NESCore
+import Testing
 
 /// ADC/SBC/compare semantics. The overflow flag is the classic source of subtle
 /// emulator bugs, so all four sign combinations are covered explicitly.
 @Suite("CPU: arithmetic and flags")
 struct CPUArithmeticTests {
-
     // MARK: ADC
 
     @Test("ADC adds with carry in")
@@ -36,8 +35,8 @@ struct CPUArithmeticTests {
         #expect(f.zero)
     }
 
-    // The V flag is set only when two like-signed operands produce a
-    // differently-signed result.
+    /// The V flag is set only when two like-signed operands produce a
+    /// differently-signed result.
     @Test("ADC overflow: positive + positive = negative sets V",
           arguments: [(UInt8(0x50), UInt8(0x50), UInt8(0xA0), true)])
     func adcOverflowPosPos(a: UInt8, operand: UInt8, result: UInt8, v: Bool) {

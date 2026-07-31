@@ -42,11 +42,11 @@ public enum CartridgeError: Error, CustomStringConvertible {
     public var description: String {
         switch self {
         case .notINES:
-            return "Not an iNES file (missing 'NES\\x1A' magic)."
-        case .truncated(let expected, let got):
-            return "ROM truncated: header declares \(expected) bytes of data, file has \(got)."
-        case .unsupportedMapper(let n):
-            return "Unsupported mapper \(n). Only mapper 0 (NROM) and 1 (MMC1) are implemented."
+            "Not an iNES file (missing 'NES\\x1A' magic)."
+        case let .truncated(expected, got):
+            "ROM truncated: header declares \(expected) bytes of data, file has \(got)."
+        case let .unsupportedMapper(n):
+            "Unsupported mapper \(n). Only mapper 0 (NROM) and 1 (MMC1) are implemented."
         }
     }
 }
@@ -87,13 +87,13 @@ public final class Cartridge {
         }
 
         let hasTrainer = (flags6 & 0x04) != 0
-        self.hasBattery = (flags6 & 0x02) != 0
-        self.mapperNumber = Int((flags6 >> 4) | (flags7 & 0xF0))
+        hasBattery = (flags6 & 0x02) != 0
+        mapperNumber = Int((flags6 >> 4) | (flags7 & 0xF0))
 
         if (flags6 & 0x08) != 0 {
-            self.initialMirroring = .fourScreen
+            initialMirroring = .fourScreen
         } else {
-            self.initialMirroring = (flags6 & 0x01) != 0 ? .vertical : .horizontal
+            initialMirroring = (flags6 & 0x01) != 0 ? .vertical : .horizontal
         }
 
         let prgSize = prgBanks * 0x4000
@@ -105,19 +105,19 @@ public final class Cartridge {
             throw CartridgeError.truncated(expected: needed, got: data.count)
         }
 
-        self.prgROM = Array(data[offset ..< offset + prgSize])
+        prgROM = Array(data[offset..<offset + prgSize])
         offset += prgSize
 
         if chrSize == 0 {
             // Zero CHR banks means the board carries 8KB of CHR-RAM instead.
-            self.chr = [UInt8](repeating: 0, count: 0x2000)
-            self.usesCHRRAM = true
+            chr = [UInt8](repeating: 0, count: 0x2000)
+            usesCHRRAM = true
         } else {
-            self.chr = Array(data[offset ..< offset + chrSize])
-            self.usesCHRRAM = false
+            chr = Array(data[offset..<offset + chrSize])
+            usesCHRRAM = false
         }
 
-        self.prgRAM = [UInt8](repeating: 0, count: 0x2000)
+        prgRAM = [UInt8](repeating: 0, count: 0x2000)
     }
 
     public convenience init(contentsOf url: URL) throws {

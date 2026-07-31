@@ -35,13 +35,13 @@ public protocol Mapper: AnyObject {
     var persistentState: [UInt8] { get set }
 }
 
-extension Mapper {
-    public var currentPRGBank: Int { 0 }
-    public func ppuAddressChanged(_ address: UInt16) {}
-    public var irqAsserted: Bool { false }
-    public var persistentState: [UInt8] {
+public extension Mapper {
+    var currentPRGBank: Int { 0 }
+    func ppuAddressChanged(_: UInt16) {}
+    var irqAsserted: Bool { false }
+    var persistentState: [UInt8] {
         get { [] }
-        set { }
+        set {}
     }
 }
 

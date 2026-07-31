@@ -7,7 +7,6 @@ import Foundation
 /// ROM picker and no library UI — one app is one game. Adding another title
 /// means writing another conformance, not another emulator.
 public protocol GameDefinition {
-
     /// Display name, used for the app title and window.
     static var title: String { get }
 
@@ -32,9 +31,9 @@ public protocol GameDefinition {
     static var symbols: SymbolMap { get }
 }
 
-extension GameDefinition {
-    public static var nativeRoutines: RoutineTable { RoutineTable() }
-    public static var symbols: SymbolMap { SymbolMap() }
+public extension GameDefinition {
+    static var nativeRoutines: RoutineTable { RoutineTable() }
+    static var symbols: SymbolMap { SymbolMap() }
 }
 
 /// Named locations in the CPU address space, recovered by reverse engineering.
@@ -68,18 +67,18 @@ public enum ROMValidationError: Error, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .hashMismatch(let expected, let actual):
-            return "ROM hash mismatch.\n  expected \(expected)\n  actual   \(actual)"
-        case .mapperMismatch(let expected, let actual):
-            return "ROM uses mapper \(actual), but this game expects mapper \(expected)."
+        case let .hashMismatch(expected, actual):
+            "ROM hash mismatch.\n  expected \(expected)\n  actual   \(actual)"
+        case let .mapperMismatch(expected, actual):
+            "ROM uses mapper \(actual), but this game expects mapper \(expected)."
         }
     }
 }
 
-extension GameDefinition {
+public extension GameDefinition {
     /// Verifies a ROM is the exact image this game's decompiled routines and
     /// symbol map were derived from.
-    public static func validate(romData: [UInt8], cartridge: Cartridge) throws {
+    static func validate(romData: [UInt8], cartridge: Cartridge) throws {
         guard cartridge.mapperNumber == expectedMapper else {
             throw ROMValidationError.mapperMismatch(
                 expected: expectedMapper, actual: cartridge.mapperNumber)

@@ -13,7 +13,6 @@ import NESCore
 /// order-sensitive — writing scroll then address behaves differently from the
 /// reverse — so the *sequence* of writes is compared too.
 public enum RoutineVerifier {
-
     /// Where a routine "returns to". Chosen in RAM, far from any real code, so
     /// execution never actually reaches it.
     public static let sentinel: UInt16 = 0x0002
@@ -111,7 +110,7 @@ public enum RoutineVerifier {
         nes.cpu.enterSubroutine(at: address, returningTo: sentinel)
 
         var executed = 0
-        while nes.cpu.pc != sentinel && executed < maxInstructions {
+        while nes.cpu.pc != sentinel, executed < maxInstructions {
             // Step the CPU alone rather than the whole machine. Clocking the
             // PPU would let an NMI fire mid-routine and run the game's entire
             // frame handler, which has nothing to do with the routine under
@@ -191,7 +190,8 @@ public enum RoutineVerifier {
         var found: [Discrepancy] = []
 
         func check(_ field: String, _ lhs: some Equatable & CustomStringConvertible,
-                   _ rhs: some Equatable & CustomStringConvertible) {
+                   _ rhs: some Equatable & CustomStringConvertible)
+        {
             if "\(lhs)" != "\(rhs)" {
                 found.append(Discrepancy(field: field,
                                          interpreted: "\(lhs)", native: "\(rhs)"))
@@ -213,7 +213,8 @@ public enum RoutineVerifier {
         // RAM deltas.
         if interpreted.ram.count == native.ram.count {
             for index in 0..<interpreted.ram.count
-            where interpreted.ram[index] != native.ram[index] {
+                where interpreted.ram[index] != native.ram[index]
+            {
                 found.append(Discrepancy(
                     field: String(format: "RAM $%04X", index),
                     interpreted: hex(interpreted.ram[index]),
@@ -301,7 +302,7 @@ public struct SeededGenerator: RandomNumberGenerator {
     private var state: UInt64
 
     public init(seed: UInt64) {
-        self.state = seed &* 6364136223846793005 &+ 1442695040888963407
+        state = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
     }
 
     public mutating func next() -> UInt64 {

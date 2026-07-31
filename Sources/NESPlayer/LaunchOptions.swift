@@ -1,7 +1,7 @@
 import Foundation
 
 #if os(iOS)
-import UIKit
+    import UIKit
 #endif
 
 /// Launch-time overrides, read from the standard argument domain so they can be
@@ -15,7 +15,6 @@ import UIKit
 /// physically rotating a device — the simulator cannot be rotated from the
 /// command line, but the app can rotate itself.
 public enum LaunchOptions {
-
     /// `portrait` or `landscape`, if the caller pinned one.
     public static var requestedOrientation: String? {
         UserDefaults.standard.string(forKey: "nesOrientation")?.lowercased()
@@ -38,27 +37,27 @@ public enum LaunchOptions {
     }
 
     #if os(iOS)
-    /// Asks the window scene to adopt the requested orientation, if any.
-    @MainActor
-    public static func applyRequestedOrientation() {
-        guard let requested = requestedOrientation else { return }
+        /// Asks the window scene to adopt the requested orientation, if any.
+        @MainActor
+        public static func applyRequestedOrientation() {
+            guard let requested = requestedOrientation else { return }
 
-        let mask: UIInterfaceOrientationMask
-        switch requested {
-        case "landscape", "landscaperight": mask = .landscapeRight
-        case "landscapeleft":               mask = .landscapeLeft
-        case "portrait":                    mask = .portrait
-        default:                            return
+            let mask: UIInterfaceOrientationMask
+            switch requested {
+            case "landscape", "landscaperight": mask = .landscapeRight
+            case "landscapeleft":               mask = .landscapeLeft
+            case "portrait":                    mask = .portrait
+            default:                            return
+            }
+
+            guard let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first
+            else { return }
+
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { error in
+                print("orientation: request failed — \(error)")
+            }
         }
-
-        guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first
-        else { return }
-
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { error in
-            print("orientation: request failed — \(error)")
-        }
-    }
     #endif
 }

@@ -1,7 +1,7 @@
-import Foundation
 import AVFoundation
-import os
+import Foundation
 import NESCore
+import os
 
 /// Single-producer, single-consumer sample queue between emulation and the
 /// audio render thread.
@@ -12,7 +12,6 @@ import NESCore
 /// indefinitely by a lower-priority producer, and the critical sections are
 /// just memory copies.
 final class AudioRingBuffer: @unchecked Sendable {
-
     private let lock = OSAllocatedUnfairLock()
     private var storage: [Float]
     private let capacity: Int
@@ -23,7 +22,7 @@ final class AudioRingBuffer: @unchecked Sendable {
 
     init(capacity: Int = 16384) {
         self.capacity = capacity
-        self.storage = [Float](repeating: 0, count: capacity)
+        storage = [Float](repeating: 0, count: capacity)
     }
 
     var count: Int {
@@ -69,7 +68,6 @@ final class AudioRingBuffer: @unchecked Sendable {
 
 /// Plays APU output through AVAudioEngine.
 final class AudioOutput {
-
     private let engine = AVAudioEngine()
     private var sourceNode: AVAudioSourceNode?
     private let ring = AudioRingBuffer()
@@ -144,15 +142,15 @@ final class AudioOutput {
 
     private func configureSession() {
         #if os(iOS) || os(tvOS)
-        do {
-            // .ambient respects the ring/silent switch and mixes with other
-            // audio, so starting the game never interrupts a podcast.
-            try AVAudioSession.sharedInstance().setCategory(
-                .ambient, mode: .default, options: [.mixWithOthers])
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {
-            print("audio: session configuration failed — \(error)")
-        }
+            do {
+                // .ambient respects the ring/silent switch and mixes with other
+                // audio, so starting the game never interrupts a podcast.
+                try AVAudioSession.sharedInstance().setCategory(
+                    .ambient, mode: .default, options: [.mixWithOthers])
+                try AVAudioSession.sharedInstance().setActive(true)
+            } catch {
+                print("audio: session configuration failed — \(error)")
+            }
         #endif
     }
 }

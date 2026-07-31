@@ -6,7 +6,6 @@ import NESCore
 /// `NESCore` stays game-agnostic so another title is a sibling of this file
 /// rather than a fork of the emulator.
 public enum Zelda: GameDefinition {
-
     public static let title = "The Legend of Zelda"
     public static let romResourceName = "zelda"
     public static let expectedMapper = 1

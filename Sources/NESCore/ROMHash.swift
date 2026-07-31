@@ -1,5 +1,5 @@
-import Foundation
 import CryptoKit
+import Foundation
 
 /// SHA-256 over ROM images, used to pin a game to the exact dump its
 /// decompiled routines and symbol map were derived from.

@@ -1,5 +1,5 @@
-import SwiftUI
 import NESCore
+import SwiftUI
 
 /// The game screen: a nearest-neighbour scaled framebuffer.
 ///
@@ -89,51 +89,51 @@ public struct EmulatorView: View {
     @ViewBuilder
     private var content: some View {
         #if os(iOS)
-        GeometryReader { geometry in
-            if geometry.size.width > geometry.size.height {
-                landscape(geometry.size)
-            } else {
-                portrait(geometry.size)
+            GeometryReader { geometry in
+                if geometry.size.width > geometry.size.height {
+                    landscape(geometry.size)
+                } else {
+                    portrait(geometry.size)
+                }
             }
-        }
         #else
-        // macOS and tvOS drive input from keyboard or a game controller, so the
-        // screen gets the whole window.
-        GameScreen(image: host.frame)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // macOS and tvOS drive input from keyboard or a game controller, so the
+            // screen gets the whole window.
+            GameScreen(image: host.frame)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         #endif
     }
 
     #if os(iOS)
-    private func portrait(_ size: CGSize) -> some View {
-        VStack(spacing: 0) {
-            GameScreen(image: host.frame)
-                .frame(maxWidth: .infinity)
-            // Controls take all remaining height and scale into it, rather than
-            // sitting in a fixed strip with dead space above.
-            TouchControls(host: host, layout: .portrait(size))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        private func portrait(_ size: CGSize) -> some View {
+            VStack(spacing: 0) {
+                GameScreen(image: host.frame)
+                    .frame(maxWidth: .infinity)
+                // Controls take all remaining height and scale into it, rather than
+                // sitting in a fixed strip with dead space above.
+                TouchControls(host: host, layout: .portrait(size))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
-    }
 
-    private func landscape(_ size: CGSize) -> some View {
-        // Give the screen every pixel of height it can use, then hand whatever
-        // is left over to the controls on either side. On a modern phone that
-        // is comfortably enough for a full-size pad, so nothing overlaps the
-        // picture.
-        let screenWidth = min(size.height * (4.0 / 3.0), size.width * 0.62)
-        let controlWidth = max((size.width - screenWidth) / 2, 0)
+        private func landscape(_ size: CGSize) -> some View {
+            // Give the screen every pixel of height it can use, then hand whatever
+            // is left over to the controls on either side. On a modern phone that
+            // is comfortably enough for a full-size pad, so nothing overlaps the
+            // picture.
+            let screenWidth = min(size.height * (4.0 / 3.0), size.width * 0.62)
+            let controlWidth = max((size.width - screenWidth) / 2, 0)
 
-        return ZStack {
-            GameScreen(image: host.frame)
-                .frame(width: screenWidth, height: size.height)
+            return ZStack {
+                GameScreen(image: host.frame)
+                    .frame(width: screenWidth, height: size.height)
 
-            TouchControls(
-                host: host,
-                layout: .landscape(controlWidth: controlWidth, height: size.height))
+                TouchControls(
+                    host: host,
+                    layout: .landscape(controlWidth: controlWidth, height: size.height))
+            }
+            .frame(width: size.width, height: size.height)
         }
-        .frame(width: size.width, height: size.height)
-    }
     #endif
 
     private var diagnostics: some View {

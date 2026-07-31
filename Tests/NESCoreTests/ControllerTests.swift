@@ -1,12 +1,11 @@
-import Testing
 @testable import NESCore
+import Testing
 
 /// The standard NES controller is a parallel-to-serial shift register: strobe
 /// high samples the buttons continuously, strobe low latches them, and each
 /// read shifts one bit out in a fixed order.
 @Suite("Controller")
 struct ControllerTests {
-
     @Test("Buttons shift out in hardware order, one per read")
     func shiftOrder() {
         let c = Controller()

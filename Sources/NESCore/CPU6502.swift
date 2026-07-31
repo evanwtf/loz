@@ -10,7 +10,6 @@ public protocol CPUBus: AnyObject {
 /// decompiled Swift routines are differentially tested against, so it aims for
 /// exact register/flag semantics rather than raw speed.
 public final class CPU6502 {
-
     // MARK: Registers
 
     public var a: UInt8 = 0
@@ -36,7 +35,7 @@ public final class CPU6502 {
 
     // MARK: Status flags
 
-    public struct Flag {
+    public enum Flag {
         public static let carry: UInt8     = 1 << 0
         public static let zero: UInt8      = 1 << 1
         public static let interrupt: UInt8 = 1 << 2
@@ -200,7 +199,7 @@ public final class CPU6502 {
             serviceNMI()
             return 7
         }
-        if pendingIRQ && !flag(Flag.interrupt) {
+        if pendingIRQ, !flag(Flag.interrupt) {
             serviceIRQ()
             return 7
         }
@@ -212,7 +211,7 @@ public final class CPU6502 {
 
         var cycles = insn.cycles
         let (address, pageCrossed) = resolve(insn.mode)
-        if pageCrossed && insn.pageCrossPenalty { cycles += 1 }
+        if pageCrossed, insn.pageCrossPenalty { cycles += 1 }
 
         cycles += execute(insn, address: address)
 
@@ -306,7 +305,6 @@ public final class CPU6502 {
         @inline(__always) func operand() -> UInt8 { read(address) }
 
         switch insn.mnemonic {
-
         // MARK: Load / store
         case .LDA: a = operand(); setZN(a)
         case .LDX: x = operand(); setZN(x)
@@ -314,7 +312,6 @@ public final class CPU6502 {
         case .STA: write(address, a)
         case .STX: write(address, x)
         case .STY: write(address, y)
-
         // MARK: Transfers
         case .TAX: x = a; setZN(x)
         case .TAY: y = a; setZN(y)
@@ -322,13 +319,11 @@ public final class CPU6502 {
         case .TYA: a = y; setZN(a)
         case .TSX: x = sp; setZN(x)
         case .TXS: sp = x                     // does not affect flags
-
         // MARK: Stack
         case .PHA: push(a)
         case .PHP: push(status | Flag.breakCmd | Flag.unused)
         case .PLA: a = pull(); setZN(a)
         case .PLP: status = (pull() & ~Flag.breakCmd) | Flag.unused
-
         // MARK: Logic
         case .AND: a &= operand(); setZN(a)
         case .ORA: a |= operand(); setZN(a)
@@ -338,14 +333,12 @@ public final class CPU6502 {
             setFlag(Flag.zero, (a & v) == 0)
             setFlag(Flag.overflow, v & 0x40 != 0)
             setFlag(Flag.negative, v & 0x80 != 0)
-
         // MARK: Arithmetic
         case .ADC: adc(operand())
         case .SBC: adc(~operand())            // A - M - !C == A + ~M + C
         case .CMP: compare(a, operand())
         case .CPX: compare(x, operand())
         case .CPY: compare(y, operand())
-
         // MARK: Increment / decrement
         case .INC:
             let v = operand() &+ 1
@@ -357,7 +350,6 @@ public final class CPU6502 {
         case .INY: y &+= 1; setZN(y)
         case .DEX: x &-= 1; setZN(x)
         case .DEY: y &-= 1; setZN(y)
-
         // MARK: Shifts
         case .ASL:
             if mode == .accumulator {
@@ -393,7 +385,6 @@ public final class CPU6502 {
                 setFlag(Flag.carry, v & 0x01 != 0); v = (v >> 1) | carryIn
                 write(address, v); setZN(v)
             }
-
         // MARK: Jumps / calls
         case .JMP: pc = address
         case .JSR:
@@ -409,7 +400,6 @@ public final class CPU6502 {
             push(status | Flag.breakCmd | Flag.unused)
             setFlag(Flag.interrupt, true)
             pc = read16(0xFFFE)
-
         // MARK: Branches
         case .BPL: return branch(address, if: !flag(Flag.negative))
         case .BMI: return branch(address, if:  flag(Flag.negative))
@@ -419,7 +409,6 @@ public final class CPU6502 {
         case .BCS: return branch(address, if:  flag(Flag.carry))
         case .BNE: return branch(address, if: !flag(Flag.zero))
         case .BEQ: return branch(address, if:  flag(Flag.zero))
-
         // MARK: Flag control
         case .CLC: setFlag(Flag.carry, false)
         case .SEC: setFlag(Flag.carry, true)
@@ -428,10 +417,8 @@ public final class CPU6502 {
         case .CLV: setFlag(Flag.overflow, false)
         case .CLD: setFlag(Flag.decimal, false)
         case .SED: setFlag(Flag.decimal, true)
-
         case .NOP: break
         case .KIL: pc &-= 1                   // jams the CPU; keep it observable
-
         // MARK: Undocumented
         case .LAX: a = operand(); x = a; setZN(a)
         case .SAX: write(address, a & x)

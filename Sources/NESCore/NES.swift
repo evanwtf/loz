@@ -3,7 +3,6 @@
 /// `NES` doubles as the CPU's bus — it owns the address decoding for the
 /// entire $0000-$FFFF space.
 public final class NES {
-
     public let cartridge: Cartridge
     public let mapper: Mapper
     public let ppu: PPU
@@ -43,17 +42,17 @@ public final class NES {
 
     public init(cartridge: Cartridge, sampleRate: Double = 44100) throws {
         self.cartridge = cartridge
-        self.mapper = try cartridge.makeMapper()
-        self.ppu = PPU(mapper: mapper)
-        self.apu = APU(sampleRate: sampleRate)
-        self.cpu = CPU6502(bus: self)
+        mapper = try cartridge.makeMapper()
+        ppu = PPU(mapper: mapper)
+        apu = APU(sampleRate: sampleRate)
+        cpu = CPU6502(bus: self)
         // The DMC fetches its samples straight off the CPU bus.
-        self.apu.readMemory = { [unowned self] address in self.cpuRead(address) }
+        apu.readMemory = { [unowned self] address in cpuRead(address) }
         cpu.reset()
     }
 
     public convenience init(romData: [UInt8]) throws {
-        try self.init(cartridge: try Cartridge(data: romData))
+        try self.init(cartridge: Cartridge(data: romData))
     }
 
     public func reset() {
@@ -113,7 +112,7 @@ public final class NES {
         ppu.frameComplete = false
         var guardCounter = 0
         // A frame is ~29,780 CPU cycles; the cap only catches a wedged CPU.
-        while !ppu.frameComplete && guardCounter < 100_000 {
+        while !ppu.frameComplete, guardCounter < 100_000 {
             step()
             guardCounter += 1
         }
@@ -126,31 +125,30 @@ public final class NES {
 // MARK: - CPU address decoding
 
 extension NES: CPUBus {
-
     public func cpuRead(_ address: UInt16) -> UInt8 {
         switch address {
         case 0x0000...0x1FFF:
             // 2KB mirrored four times.
-            return ram[Int(address & 0x07FF)]
+            ram[Int(address & 0x07FF)]
 
         case 0x2000...0x3FFF:
             // Eight registers mirrored every 8 bytes.
-            return ppu.readRegister(address & 0x2007)
+            ppu.readRegister(address & 0x2007)
 
         case 0x4016:
-            return controller1.read()
+            controller1.read()
 
         case 0x4017:
-            return controller2.read()
+            controller2.read()
 
         case 0x4015:
-            return apu.readStatus()
+            apu.readStatus()
 
         case 0x4000...0x4014:
-            return 0   // write-only; open bus on read
+            0   // write-only; open bus on read
 
         default:
-            return mapper.cpuRead(address) ?? 0
+            mapper.cpuRead(address) ?? 0
         }
     }
 

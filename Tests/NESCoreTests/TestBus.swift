@@ -1,5 +1,5 @@
-import Testing
 @testable import NESCore
+import Testing
 
 /// A flat 64KB address space. Lets CPU tests exercise instruction semantics
 /// without dragging in the PPU, mappers, or memory mirroring.

@@ -1,0 +1,47 @@
+# Formatting rules for loz.
+#
+# Deliberately close to swiftformat's defaults so the diff stays small and the
+# tool stays useful as a check rather than a constant source of churn.
+
+--swiftversion 6.0
+
+# 4-space indent, 96-column soft limit. The emulator has a lot of tabular code
+# (opcode tables, palettes) that reads far better slightly wider than 80.
+--indent 4
+--maxwidth 96
+
+# Keep aligned table literals and comment blocks intact — the opcode table and
+# NES palette are laid out in grids on purpose, and wrapping them destroys the
+# structure that makes them checkable by eye.
+--wraparguments preserve
+--wrapcollections preserve
+--trimwhitespace nonblank-lines
+
+# Explicit self only where required.
+--self remove
+
+# Rules deliberately disabled:
+#
+#   consecutiveSpaces  — the opcode table, NES palette, and APU period tables
+#                        are laid out as grids so a shifted row is visible by
+#                        eye. Collapsing runs of spaces destroys exactly the
+#                        property that makes them reviewable.
+#   wrapFunctionBodies — one-line accessors and helpers read better as one line.
+#   blankLinesAroundMark — MARK sections here often follow a doc comment.
+#   wrapIf/Loop/PropertyBodies — the CPU and PPU inner loops use compact
+#                        single-line guards deliberately; expanding every one
+#                        buries the logic in braces.
+#   wrap, wrapArguments — these break the opcode table's 4-entries-per-row grid
+#                        into ragged 3+1 lines. That grid is what makes a
+#                        256-entry table verifiable by eye; a shifted row is
+#                        immediately visible. Losing it to satisfy a column
+#                        limit is a net loss of quality.
+--disable consecutiveSpaces, wrapFunctionBodies, blankLinesAroundMark, \
+          wrapIfStatementBodies, wrapLoopBodies, wrapPropertyBodies, \
+          wrap, wrapArguments
+
+--exclude .build,Reference
+
+# Ranges without spaces: 0..<n reads better than 0 ..< n and matches
+# prevailing Swift style.
+--ranges nospace

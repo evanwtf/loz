@@ -1,9 +1,8 @@
-import Testing
 @testable import NESCore
+import Testing
 
 @Suite("PPU")
 struct PPUTests {
-
     /// A PPU backed by a CHR-RAM cartridge so tests can write pattern data.
     private func makePPU(mirroring vertical: Bool = false) -> PPU {
         var rom: [UInt8] = Array("NES\u{1A}".utf8)
@@ -25,7 +24,7 @@ struct PPUTests {
 
     private func run(_ ppu: PPU, toScanline scanline: Int) {
         var guardCount = 0
-        while ppu.scanline != scanline && guardCount < 400_000 {
+        while ppu.scanline != scanline, guardCount < 400_000 {
             ppu.step()
             guardCount += 1
         }
@@ -110,12 +109,12 @@ struct PPUTests {
     func loopyWrites() {
         let ppu = makePPU()
         // $2005 first write: coarse X into t, fine X into its own latch.
-        ppu.writeRegister(0x2005, 0b11111_101)
+        ppu.writeRegister(0x2005, 0b1111_1101)
         #expect(ppu.t & 0x001F == 0b11111)
         #expect(ppu.fineX == 0b101)
 
         // $2005 second write: coarse Y and fine Y.
-        ppu.writeRegister(0x2005, 0b10101_011)
+        ppu.writeRegister(0x2005, 0b1010_1011)
         #expect((ppu.t >> 12) & 0x07 == 0b011)
         #expect((ppu.t >> 5) & 0x1F == 0b10101)
     }

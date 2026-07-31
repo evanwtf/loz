@@ -1,11 +1,10 @@
-import Testing
 @testable import NESCore
+import Testing
 
 /// The native-routine dispatcher is the spine of incremental decompilation:
 /// a registered routine must be indistinguishable from the 6502 it replaces.
 @Suite("Native routine dispatch")
 struct RoutineDispatchTests {
-
     /// 32KB NROM image with code planted at the given PRG offsets, reset
     /// vectoring to $8000. Offset 0 corresponds to CPU address $8000.
     private func makeNES(_ blocks: [(offset: Int, bytes: [UInt8])]) throws -> NES {
@@ -21,7 +20,7 @@ struct RoutineDispatchTests {
         prg[0x7FFD] = 0x80
 
         let chr = [UInt8](repeating: 0, count: 0x2000)
-        return try NES(cartridge: try Cartridge(data: header + prg + chr))
+        return try NES(cartridge: Cartridge(data: header + prg + chr))
     }
 
     /// `JSR $9000` at $8000; the subroutine at $9000 loads $FF and returns.

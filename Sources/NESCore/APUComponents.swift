@@ -1,10 +1,10 @@
-/// Shared building blocks of the 2A03 sound channels.
-///
-/// Each is a small state machine clocked by the frame counter. They are
-/// separated out because pulse, triangle, and noise share them in different
-/// combinations, and because they are individually testable — which matters,
-/// since a wrong envelope or length counter is audible but very hard to
-/// attribute by ear.
+// Shared building blocks of the 2A03 sound channels.
+//
+// Each is a small state machine clocked by the frame counter. They are
+// separated out because pulse, triangle, and noise share them in different
+// combinations, and because they are individually testable — which matters,
+// since a wrong envelope or length counter is audible but very hard to
+// attribute by ear.
 
 /// Gates a channel off after a programmed duration.
 ///
@@ -33,7 +33,7 @@ struct LengthCounter {
     }
 
     mutating func clock() {
-        if !halt && value > 0 { value -= 1 }
+        if !halt, value > 0 { value -= 1 }
     }
 }
 

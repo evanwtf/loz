@@ -1,4 +1,4 @@
-/// The five sound channels of the 2A03.
+// The five sound channels of the 2A03.
 
 // MARK: - Pulse
 
@@ -80,7 +80,7 @@ struct TriangleChannel {
             timer = timerPeriod
             // The sequencer only advances while both gates are open. It does
             // not reset, so a re-triggered note resumes mid-waveform.
-            if linear.isActive && length.isActive {
+            if linear.isActive, length.isActive {
                 sequencePosition = (sequencePosition + 1) % 32
             }
         } else {

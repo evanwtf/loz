@@ -5,7 +5,6 @@
 /// model (v/t/x/w), which is the only formulation that gets mid-frame scroll
 /// splits right — and Zelda's status bar is exactly such a split.
 public final class PPU {
-
     // MARK: Register bitfields
 
     public struct Control: OptionSet, Sendable {
@@ -58,7 +57,7 @@ public final class PPU {
     public internal(set) var oam = [UInt8](repeating: 0, count: 256)
     public var oamAddress: UInt8 = 0
 
-    // Loopy scroll registers.
+    /// Loopy scroll registers.
     /// Current VRAM address (15 bits): `yyy NN YYYYY XXXXX`.
     var v: UInt16 = 0
     /// Temporary address / topmost scroll latch.
@@ -439,7 +438,7 @@ public final class PPU {
         // Background.
         var bgPixel: UInt8 = 0
         var bgPalette: UInt8 = 0
-        if mask.contains(.showBG) && (x >= 8 || mask.contains(.showBGLeft)) {
+        if mask.contains(.showBG), x >= 8 || mask.contains(.showBGLeft) {
             let bit = UInt16(0x8000) >> UInt16(fineX)
             let lo: UInt8 = (bgShiftLo & bit) != 0 ? 1 : 0
             let hi: UInt8 = (bgShiftHi & bit) != 0 ? 1 : 0
@@ -455,7 +454,7 @@ public final class PPU {
         var spriteBehind = false
         var spriteIsZero = false
 
-        if mask.contains(.showSprites) && (x >= 8 || mask.contains(.showSpritesLeft)) {
+        if mask.contains(.showSprites), x >= 8 || mask.contains(.showSpritesLeft) {
             for i in 0..<spriteCount {
                 let sprite = spriteSlots[i]
                 let offset = x - Int(sprite.x)
@@ -478,16 +477,17 @@ public final class PPU {
         // Sprite 0 hit: an opaque sprite-0 pixel over an opaque background
         // pixel. This is the signal Zelda uses to split its status bar, so the
         // exact conditions matter — including that it never fires at x = 255.
-        if spriteIsZero && spritePixel != 0 && bgPixel != 0
-            && mask.contains(.showBG) && mask.contains(.showSprites)
-            && x != 255
-            && (x >= 8 || (mask.contains(.showBGLeft) && mask.contains(.showSpritesLeft))) {
+        if spriteIsZero, spritePixel != 0, bgPixel != 0,
+           mask.contains(.showBG), mask.contains(.showSprites),
+           x != 255,
+           x >= 8 || (mask.contains(.showBGLeft) && mask.contains(.showSpritesLeft))
+        {
             status.insert(.sprite0Hit)
         }
 
         // Priority multiplexer.
         var paletteAddress: UInt16 = 0x3F00
-        if bgPixel == 0 && spritePixel == 0 {
+        if bgPixel == 0, spritePixel == 0 {
             paletteAddress = 0x3F00                     // universal backdrop
         } else if bgPixel == 0 {
             paletteAddress = 0x3F10 + UInt16(spritePalette) * 4 + UInt16(spritePixel)
@@ -531,7 +531,7 @@ public final class PPU {
                 evaluateSprites(for: scanline + 1)
             }
             // Vertical scroll is restored repeatedly across this window.
-            if preRender && dot >= 280 && dot <= 304 {
+            if preRender, dot >= 280, dot <= 304 {
                 copyVerticalBits()
             }
 
@@ -540,7 +540,7 @@ public final class PPU {
             }
         }
 
-        if scanline == 241 && dot == 1 {
+        if scanline == 241, dot == 1 {
             status.insert(.vblank)
             frameComplete = true
             if control.contains(.nmiEnabled) {
@@ -560,7 +560,7 @@ public final class PPU {
         }
 
         // On odd frames with rendering on, the pre-render line is one dot short.
-        if preRender && dot == 340 && frame % 2 == 1 && renderingEnabled {
+        if preRender, dot == 340, frame % 2 == 1, renderingEnabled {
             dot = 0
             scanline = 0
             frame += 1

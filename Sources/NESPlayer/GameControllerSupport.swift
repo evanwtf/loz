@@ -1,6 +1,6 @@
-import SwiftUI
 import GameController
 import NESCore
+import SwiftUI
 
 /// Binds MFi, Xbox, and DualSense controllers to the emulated pad.
 ///

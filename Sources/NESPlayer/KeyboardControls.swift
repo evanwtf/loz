@@ -1,5 +1,5 @@
-import SwiftUI
 import NESCore
+import SwiftUI
 
 /// Keyboard input for macOS and hardware keyboards on iPad.
 ///
@@ -49,15 +49,15 @@ struct KeyboardControls: ViewModifier {
 
     private static func button(for key: KeyEquivalent) -> NESButton? {
         switch key {
-        case .upArrow:    return .up
-        case .downArrow:  return .down
-        case .leftArrow:  return .left
-        case .rightArrow: return .right
-        case .return:     return .start
-        case .space:      return .select
-        case "z":         return .b
-        case "x":         return .a
-        default:          return nil
+        case .upArrow:    .up
+        case .downArrow:  .down
+        case .leftArrow:  .left
+        case .rightArrow: .right
+        case .return:     .start
+        case .space:      .select
+        case "z":         .b
+        case "x":         .a
+        default:          nil
         }
     }
 }

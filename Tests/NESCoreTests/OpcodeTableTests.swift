@@ -1,9 +1,8 @@
-import Testing
 @testable import NESCore
+import Testing
 
 @Suite("Opcode table")
 struct OpcodeTableTests {
-
     @Test("Table has exactly 256 entries")
     func tableSize() {
         #expect(Opcodes.table.count == 256)

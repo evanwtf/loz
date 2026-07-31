@@ -5,7 +5,6 @@ import Foundation
 /// Clocked once per CPU cycle. Produces mono float samples at a configurable
 /// rate for the host's audio engine.
 public final class APU {
-
     // MARK: Channels
 
     var pulse1 = PulseChannel(isPulse1: true)
@@ -51,9 +50,9 @@ public final class APU {
 
     public init(sampleRate: Double = 44100, bufferCapacity: Int = 8192) {
         self.sampleRate = sampleRate
-        self.cyclesPerSample = Self.cpuClock / sampleRate
-        self.capacity = bufferCapacity
-        self.buffer = [Float](repeating: 0, count: bufferCapacity)
+        cyclesPerSample = Self.cpuClock / sampleRate
+        capacity = bufferCapacity
+        buffer = [Float](repeating: 0, count: bufferCapacity)
     }
 
     // MARK: Clock
@@ -244,7 +243,6 @@ public final class APU {
 
     public func writeRegister(_ address: UInt16, _ value: UInt8) {
         switch address {
-
         // Pulse 1
         case 0x4000:
             pulse1.duty = Int((value >> 6) & 0x03)
@@ -265,7 +263,6 @@ public final class APU {
             pulse1.length.load(index: value >> 3)
             pulse1.envelope.start = true
             pulse1.resetSequencer()
-
         // Pulse 2
         case 0x4004:
             pulse2.duty = Int((value >> 6) & 0x03)
@@ -286,7 +283,6 @@ public final class APU {
             pulse2.length.load(index: value >> 3)
             pulse2.envelope.start = true
             pulse2.resetSequencer()
-
         // Triangle
         case 0x4008:
             triangle.linear.control = value & 0x80 != 0
@@ -298,7 +294,6 @@ public final class APU {
             triangle.timerPeriod = (triangle.timerPeriod & 0x00FF) | (UInt16(value & 0x07) << 8)
             triangle.length.load(index: value >> 3)
             triangle.linear.reload = true
-
         // Noise
         case 0x400C:
             noise.length.halt = value & 0x20 != 0
@@ -311,7 +306,6 @@ public final class APU {
         case 0x400F:
             noise.length.load(index: value >> 3)
             noise.envelope.start = true
-
         // DMC
         case 0x4010:
             dmc.irqEnabled = value & 0x80 != 0
@@ -324,7 +318,6 @@ public final class APU {
             dmc.sampleAddress = 0xC000 | (UInt16(value) << 6)
         case 0x4013:
             dmc.sampleLength = (UInt16(value) << 4) | 1
-
         // Status
         case 0x4015:
             pulse1.length.enabled = value & 0x01 != 0
@@ -337,7 +330,6 @@ public final class APU {
                 dmc.stop()
             }
             dmc.clearIRQ()
-
         // Frame counter
         case 0x4017:
             fiveStepMode = value & 0x80 != 0
@@ -349,7 +341,6 @@ public final class APU {
                 clockQuarterFrame()
                 clockHalfFrame()
             }
-
         default:
             break
         }

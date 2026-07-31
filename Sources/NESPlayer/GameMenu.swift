@@ -1,5 +1,5 @@
-import SwiftUI
 import NESCore
+import SwiftUI
 
 /// In-game overlay: save states, sound, and reset.
 ///

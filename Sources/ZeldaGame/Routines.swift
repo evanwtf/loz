@@ -7,7 +7,6 @@ import NESCore
 /// routine leaves behind are part of its contract — callers branch on them — so
 /// they are reproduced explicitly rather than left to chance.
 public enum ZeldaRoutines {
-
     /// Builds the table of everything converted so far.
     public static func table() -> RoutineTable {
         var table = RoutineTable()

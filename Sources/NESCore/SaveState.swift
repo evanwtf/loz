@@ -8,7 +8,6 @@ import Foundation
 /// runs. With snapshots that happens once, and every later investigation
 /// branches from a saved point.
 public struct SaveState: Codable, Sendable {
-
     public struct CPUState: Codable, Sendable {
         public var a: UInt8
         public var x: UInt8
@@ -59,20 +58,19 @@ public enum SaveStateError: Error, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .versionMismatch(let found, let expected):
-            return "Save state version \(found) is not supported (expected \(expected))."
+        case let .versionMismatch(found, expected):
+            "Save state version \(found) is not supported (expected \(expected))."
         case .romMismatch:
-            return "Save state was made with a different ROM."
-        case .sizeMismatch(let field):
-            return "Save state field '\(field)' has the wrong size."
+            "Save state was made with a different ROM."
+        case let .sizeMismatch(field):
+            "Save state field '\(field)' has the wrong size."
         }
     }
 }
 
-extension NES {
-
+public extension NES {
     /// Captures the full machine state.
-    public func captureState(romHash: String = "") -> SaveState {
+    func captureState(romHash: String = "") -> SaveState {
         SaveState(
             romHash: romHash,
             cpu: SaveState.CPUState(
@@ -97,7 +95,7 @@ extension NES {
     }
 
     /// Restores a previously captured state.
-    public func restoreState(_ state: SaveState, romHash: String = "") throws {
+    func restoreState(_ state: SaveState, romHash: String = "") throws {
         guard state.version == 1 else {
             throw SaveStateError.versionMismatch(found: state.version, expected: 1)
         }
@@ -143,5 +141,5 @@ extension NES {
         restoreCycles(state.cycles)
     }
 
-    func restoreCycles(_ value: Int) { cycles = value }
+    internal func restoreCycles(_ value: Int) { cycles = value }
 }

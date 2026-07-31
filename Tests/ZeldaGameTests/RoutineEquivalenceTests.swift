@@ -1,7 +1,7 @@
 import Foundation
-import Testing
-import NESCore
 import NESAnalysis
+import NESCore
+import Testing
 @testable import ZeldaGame
 
 /// Proves each decompiled routine is indistinguishable from the 6502 it
@@ -11,7 +11,6 @@ import NESAnalysis
 /// when it is absent so CI stays green without redistributing game data.
 @Suite("Decompiled routine equivalence")
 struct RoutineEquivalenceTests {
-
     /// Looks for zelda.nes beside the package.
     private static func locateROM() -> URL? {
         let candidates = [
@@ -65,11 +64,11 @@ struct RoutineEquivalenceTests {
         if let first = failures.first {
             let detail = first.discrepancies.map(\.description).joined(separator: "\n    ")
             Issue.record("""
-                \(name) diverged on \(failures.count)/\(trials) entry states.
-                First failure (A=\(first.entry.a) X=\(first.entry.x) \
-                Y=\(first.entry.y) P=\(first.entry.status)):
-                    \(detail)
-                """)
+            \(name) diverged on \(failures.count)/\(trials) entry states.
+            First failure (A=\(first.entry.a) X=\(first.entry.x) \
+            Y=\(first.entry.y) P=\(first.entry.status)):
+                \(detail)
+            """)
         }
         #expect(failures.isEmpty)
     }
