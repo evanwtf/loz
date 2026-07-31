@@ -308,6 +308,56 @@ case "embed":
       wrote:  \(outPath)  (\(source.count / 1024) KB of source)
     """)
 
+case "probe":
+    // Many candidate scripts, one process. Working out a route by launching a
+    // subprocess per guess is dominated by process start and ROM load.
+    guard let statePath = flag("--load-state", in: args),
+          let pattern = flag("--inputs", in: args)
+    else {
+        FileHandle.standardError.write(
+            "error: probe needs --load-state and --inputs\n".data(using: .utf8)!)
+        exit(1)
+    }
+
+    let state = try! JSONDecoder().decode(
+        SaveState.self, from: try! Data(contentsOf: URL(fileURLWithPath: statePath)))
+    let scripts = Probe.expand(pattern)
+
+    let watch = (flag("--watch", in: args) ?? "")
+        .split(separator: ",")
+        .compactMap { UInt16($0.trimmingCharacters(in: .whitespaces), radix: 16) }
+
+    var goal: (address: UInt16, value: UInt8)?
+    if let spec = flag("--goal", in: args) {
+        let parts = spec.split(separator: "=")
+        if parts.count == 2,
+           let address = UInt16(parts[0], radix: 16),
+           let value = UInt8(parts[1], radix: 16)
+        {
+            goal = (address, value)
+        }
+    }
+
+    let settle = Int(flag("--settle", in: args) ?? "30") ?? 30
+    print("Probing \(scripts.count) candidates...")
+    let results = Probe.run(
+        cartridge: cartridge, state: state, scripts: scripts,
+        watch: watch, goal: goal, settleFrames: settle)
+    print(Probe.report(results, goal: goal))
+
+    // Save the first candidate that hit the goal, so a successful probe leaves
+    // a state to continue from rather than needing a re-run.
+    if let outPath = flag("--save-state", in: args),
+       let winner = results.first(where: \.reachedGoal)
+    {
+        guard let nes = try? NES(cartridge: cartridge) else { break }
+        try? nes.restoreState(state)
+        runInputScript(nes, script: winner.script, filmstrip: nil, every: 0, scale: 1)
+        for _ in 0..<settle { nes.stepFrame() }
+        try! JSONEncoder().encode(nes.captureState()).write(to: URL(fileURLWithPath: outPath))
+        print("\nSaved winning state (\(winner.script)) to \(outPath)")
+    }
+
 case "mapcheck":
     // Structural comparison of rendered overworld screens against the
     // reference map. Turns "does the overworld look right" into a number.
