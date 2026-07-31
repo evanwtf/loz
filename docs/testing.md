@@ -1,6 +1,6 @@
 # Testing
 
-107 tests across 8 suites, using swift-testing. `swift test` runs in ~0.07s, so
+170 tests across 15 suites, using swift-testing. `swift test` runs in ~1.2s, so
 there is no excuse for not running it.
 
 ## Philosophy
@@ -16,16 +16,40 @@ timing.
 
 ## Suites
 
-| Suite | Guards |
-|---|---|
-| `OpcodeTableTests` | The 256-entry table has not shifted; spot-checks anchors |
-| `CPUAddressingTests` | Zero-page wrapping, page-cross penalties, the `JMP (indirect)` bug |
-| `CPUArithmeticTests` | ADC/SBC overflow in all four sign combinations, compares, shifts |
-| `CPUControlFlowTests` | Branches, subroutine frames, interrupt push semantics |
-| `PPUTests` | Register behaviour, loopy writes, mirroring, sprite-0 hit boundaries |
-| `BusTests` | RAM/register mirroring, OAM DMA, controller ports |
-| `ControllerTests` | Shift-register order, strobe, latch stability |
-| `RoutineDispatchTests` | Native dispatch replaces interpretation transparently |
+Fifteen suites across fourteen files — `APUTests.swift` declares three.
+
+### `NESCoreTests` — the emulator (143)
+
+| Suite | Tests | Guards |
+|---|---|---|
+| `Opcode table` | 4 | The 256-entry table has not shifted; spot-checks anchors |
+| `CPU: addressing modes` | 14 | Zero-page wrapping, page-cross penalties, the `JMP (indirect)` bug |
+| `CPU: arithmetic and flags` | 25 | ADC/SBC overflow in all four sign combinations, compares, shifts |
+| `CPU: control flow, stack, interrupts` | 22 | Branches, subroutine frames, interrupt push semantics |
+| `PPU` | 20 | Register behaviour, loopy writes, mirroring, sprite-0 hit boundaries |
+| `System bus` | 11 | RAM/register mirroring, OAM DMA, controller ports |
+| `Controller` | 5 | Shift-register order, strobe, latch stability |
+| `APU components` | 15 | Envelope, sweep, length counter, frame sequencer |
+| `APU channels` | 8 | Pulse, triangle, noise, DMC period and output |
+| `APU integration` | 7 | Mixing, DC blocking, the sample buffer |
+| `Save states` | 6 | Round-trip fidelity; restored machines stay in lockstep |
+| `Native routine dispatch` | 6 | Native dispatch replaces interpretation transparently |
+
+### `NESPlayerTests` — the app shell (20)
+
+| Suite | Tests | Guards |
+|---|---|---|
+| `On-screen control layout` | 13 | Controls fit the screen in **both** orientations; d-pad hit regions |
+| `Auto-resume` | 7 | Snapshots round-trip; foreign and corrupt ones are refused |
+
+### `ZeldaGameTests` — the decompilation (7)
+
+| Suite | Tests | Guards |
+|---|---|---|
+| `Decompiled routine equivalence` | 7 | Each native routine matches the 6502 original, writes in order |
+
+These seven are the only tests that need `zelda.nes`. They skip cleanly when it
+is absent, which is why CI passes on a clean checkout.
 
 ## Two bugs the tests caught
 
@@ -96,12 +120,14 @@ directly, then runs the PPU to a target scanline and inspects flags.
 
 ## What is not covered
 
-- **APU** — not implemented ([#4](../../../issues/4))
 - **Cycle-exact interrupt hijacking** — interrupts are polled between
   instructions; no commercial game depends on finer granularity
 - **MMC1 consecutive-write suppression** — see
   [emulator-mappers.md](emulator-mappers.md)
-- **Visual regression** — planned against the overworld reference map
-  ([#8](../../../issues/8))
-- **End-to-end gameplay** — currently manual via `nesrun play`; the boot-to-
-  overworld script in `docs/scripts/` is the seed for automating it
+- **Visual regression** — implemented as `nesrun mapcheck`, which correlates
+  rendered screens against the overworld reference map, but it needs the ROM so
+  it cannot run in CI. Run it by hand after touching the PPU.
+- **End-to-end gameplay** — driven by `nesrun play`/`navigate`/`probe` rather
+  than by the suite, for the same reason: it needs the ROM.
+- **The rendered image itself** — `PPUTests` asserts register and timing
+  behaviour, not pixels. `mapcheck` is what covers the picture.
