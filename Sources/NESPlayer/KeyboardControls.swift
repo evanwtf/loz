@@ -1,7 +1,7 @@
 import NESCore
 import SwiftUI
 
-/// Keyboard input for macOS and hardware keyboards on iPad.
+/// Keyboard input for macOS and hardware keyboards on iOS and iPad.
 ///
 /// Uses SwiftUI's `onKeyPress`, which reports both down and up phases, so a
 /// held direction stays held — essential for a game where you walk by holding
@@ -10,10 +10,20 @@ struct KeyboardControls: ViewModifier {
     let host: EmulatorHost
     @Binding var showDiagnostics: Bool
 
+    /// `onKeyPress` only fires on a view that actually holds focus, and
+    /// `.focusable()` merely makes it eligible for focus. On macOS that was
+    /// enough because the window makes the hosting view first responder at
+    /// launch; on iOS nothing ever did, so no key ever reached the app and the
+    /// whole modifier was silently dead. Claiming focus explicitly is what
+    /// makes a hardware keyboard work on both.
+    @FocusState private var focused: Bool
+
     func body(content: Content) -> some View {
         content
             .focusable()
             .focusEffectDisabled()
+            .focused($focused)
+            .onAppear { focused = true }
             .onKeyPress(phases: [.down, .up]) { press in
                 handle(press) ? .handled : .ignored
             }
