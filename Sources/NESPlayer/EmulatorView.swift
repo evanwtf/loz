@@ -36,7 +36,7 @@ public struct GameScreen: View {
 /// diagnostics overlay.
 public struct EmulatorView: View {
     @ObservedObject private var host: EmulatorHost
-    @State private var showDiagnostics = false
+    @State private var showDiagnostics = LaunchOptions.showDiagnostics
 
     public init(host: EmulatorHost) {
         self.host = host

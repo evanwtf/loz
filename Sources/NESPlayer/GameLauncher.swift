@@ -28,7 +28,12 @@ public struct GameLauncher<G: GameDefinition>: View {
             } else {
                 ProgressView()
                     .tint(.white)
-                    .task { load() }
+                    .task {
+                        #if os(iOS)
+                        LaunchOptions.applyRequestedOrientation()
+                        #endif
+                        load()
+                    }
             }
         }
         #if os(iOS)

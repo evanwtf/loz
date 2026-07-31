@@ -29,7 +29,13 @@ let package = Package(
         .target(
             name: "NESCore",
             swiftSettings: [
-                .unsafeFlags(["-Ounchecked"], .when(configuration: .release))
+                .unsafeFlags(["-Ounchecked"], .when(configuration: .release)),
+                // Optimise in Debug too. An interpreter is the worst case for
+                // -Onone: unoptimised the app runs at ~15 fps and looks broken,
+                // optimised it holds 60. This is well-tested library code that
+                // is rarely stepped through, so the lost debuggability is a
+                // good trade for a playable debug build.
+                .unsafeFlags(["-O"], .when(configuration: .debug)),
             ]
         ),
         .target(name: "NESAnalysis", dependencies: ["NESCore"]),
