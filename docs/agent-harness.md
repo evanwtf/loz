@@ -29,15 +29,45 @@ reproducible without redistributing anything from the cartridge.
 
 ## Commands
 
+All twelve take the ROM path as their second argument. `nesrun` with no
+arguments prints the full flag list for each.
+
 | Command | Purpose |
 |---|---|
 | `info` | Cartridge geometry and interrupt vectors |
 | `hash` | SHA-256, for pinning a `GameDefinition` |
 | `analyze` | Static code/data analysis, split by confidence |
 | `disasm --bank N` | Annotated listing for one 16KB bank |
+| `run --frames N` | Boot headlessly and dump the framebuffer |
 | `play` | Scripted input, screenshots, snapshots, tracing |
+| `probe --inputs P` | Many candidate scripts in one process — see below |
 | `navigate --to XX` | Pathfind to an overworld screen |
+| `mapcheck` | Score a rendered screen against the reference map |
 | `audio --seconds N` | Render the APU to a WAV with signal statistics |
+| `paltrace` | Log every write reaching palette memory |
+| `embed` | Emit the ROM as Swift source ([rom-free.md](rom-free.md)) |
+
+## Probing: many guesses, one process
+
+Working out an unknown route by launching `play` per guess is dominated by
+process start and ROM load, and costs a round trip per answer. `probe` restores
+the same snapshot for each candidate in one process, so a dozen guesses is one
+command and one table:
+
+```sh
+swift run -c release nesrun probe zelda.nes \
+  --load-state /tmp/room.state \
+  --inputs "right:{0..24/4},up:200" \
+  --goal 00EB=63 --watch 0070,0084 --save-state /tmp/next.state
+```
+
+`--inputs` expands braces — `{0..24/4}` is a stepped range, `{a,b,start}` is a
+list, and multiple groups expand as a product. `--goal ADDR=VAL` marks success
+in hex and `--save-state` replays the first winner so a successful probe leaves
+a snapshot to continue from rather than needing a re-run.
+
+Reach for this before writing a loop that shells out. It is the difference
+between exploring a screen in seconds and in minutes.
 
 ## Input scripts
 

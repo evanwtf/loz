@@ -9,24 +9,70 @@ import ZeldaGame
 // Minimal hand-rolled CLI; no external dependencies while the core is in flux.
 
 func usage() -> Never {
+    // Every command takes the ROM path as its second argument, so the list
+    // below is deliberately exhaustive: this help is what CI prints, and it is
+    // the first thing an agent reads when it needs a capability it has not
+    // used before. A command missing here is a command nobody finds.
     print("""
     nesrun — decompilation harness for the loz project
     
     USAGE:
-      nesrun info    <rom.nes>
-      nesrun analyze <rom.nes>
-      nesrun disasm  <rom.nes> --bank <n> [--out <file.asm>]
-      nesrun run     <rom.nes> [--frames <n>] [--out <frame.ppm>]
-      nesrun play    <rom.nes> [options]
+      nesrun <command> <rom.nes> [options]
     
-    COMMANDS:
-      info     Parse the iNES header and print cartridge geometry.
-      analyze  Recursive-descent trace from the interrupt vectors; reports
-               code/data split and the routine inventory.
+    INSPECTION:
+      info     Parse the iNES header and print cartridge geometry and vectors.
+      hash     Print the ROM's SHA-256, for pinning a GameDefinition.
+      analyze  Recursive-descent trace from the interrupt vectors; reports the
+               code/data split, routine inventory, and per-bank coverage.
       disasm   Emit an annotated listing for one 16KB PRG bank.
+               --bank <n>           Which bank to disassemble (required).
+               --out <file.asm>     Write to a file instead of stdout.
+    
+    RUNNING:
       run      Boot the ROM headlessly for N frames and dump the framebuffer.
       play     Drive the game with a scripted input sequence. Designed to be
                run by an agent: no window, PNG output, resumable snapshots.
+      probe    Run many candidate input scripts from one snapshot in a single
+               process — the fast way to work out a route. A subprocess per
+               guess is dominated by process start and ROM load.
+               --load-state <file>  Snapshot to branch from (required).
+               --inputs <pattern>   Brace-expanded scripts (required), e.g.
+                                    "right:{0..12/4},up:100" or "{a,b}:4".
+               --goal <ADDR=VAL>    Hex RAM condition marking success.
+               --watch <addrs>      Comma-separated hex addresses to report.
+               --settle <n>         Frames to run after each script (default 30).
+               --save-state <file>  Write the first candidate that hit --goal.
+      navigate Pathfind to an overworld screen by searching over $00EB.
+               --load-state <file>  Snapshot to start from (required).
+               --to <hex screen>    Destination, e.g. --to 37 (required).
+               --move-frames <n>    Frames per move (default 170).
+               --max-screens <n>    Search limit (default 80).
+               --save-state <file>  Write the arrival state.
+               --verbose            Report each screen as it is explored.
+    
+    VERIFICATION:
+      mapcheck Correlate the rendered screen against the reference overworld
+               map. Turns "does it look right" into a number.
+               --load-state <file>  Snapshot to check (required).
+               --map <file.png>     Default Reference/overworld-first-quest.png.
+               --threshold <0..1>   Pass mark (default 0.55).
+               --settle <n>         Frames before sampling (default 90) — too
+                                    few captures a mid-scroll composite.
+      audio    Render the APU to a WAV with signal statistics.
+               --seconds <n>        Duration (default 10).
+               --out <file.wav>     Output path (default audio.wav).
+               --load-state <file>  Resume from a snapshot instead of booting.
+               --input <script>     Input to drive while recording.
+      paltrace Log every write that reaches palette memory, so a transfer
+               landing at the wrong address is immediately visible.
+               --frames <n>         Frames to trace (default 45).
+    
+    CODEGEN:
+      embed    Emit the cartridge image as Swift source so the app needs no
+               .nes file at runtime. The output is gitignored.
+               --out <file.swift>   Default Sources/ZeldaGame/ZeldaROMData.swift.
+               --enum <name>        Generated enum name (default ZeldaROMData).
+               --extend <type>      Type to add `embeddedROM` to (default Zelda).
     
     PLAY OPTIONS:
       --input <script>     Input sequence, e.g. "wait:60,start:4,up+a:12".
@@ -40,7 +86,13 @@ func usage() -> Never {
       --save-state <file>  Write a snapshot when the script finishes.
       --watch <addrs>      Comma-separated hex RAM addresses to report,
                            e.g. --watch 00EB,0070.
+      --native             Install decompiled Swift routines and report their
+                           call counts.
       --trace              Record executed code and report new coverage.
+      --trace-in <file>    Merge a previous trace so coverage accumulates.
+      --trace-out <file>   Write the merged trace.
+    
+    See docs/agent-harness.md for input-script syntax and worked examples.
     """)
     exit(1)
 }
