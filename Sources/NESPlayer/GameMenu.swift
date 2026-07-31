@@ -83,6 +83,9 @@ struct GameMenu: View {
             Toggle(isOn: $host.isMuted) {
                 Label("Mute", systemImage: host.isMuted ? "speaker.slash" : "speaker.wave.2")
             }
+            Toggle(isOn: $host.autoResumeEnabled) {
+                Label("Resume where I left off", systemImage: "arrow.uturn.backward.circle")
+            }
             Toggle(isOn: $showDiagnostics) {
                 Label("Diagnostics", systemImage: "waveform.path.ecg")
             }

@@ -35,6 +35,7 @@ public struct GameScreen: View {
 /// Full player UI: screen, platform-appropriate controls, and an optional
 /// diagnostics overlay.
 public struct EmulatorView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var host: EmulatorHost
     @StateObject private var store: SaveStateStore
     @State private var showDiagnostics = LaunchOptions.showDiagnostics
@@ -52,6 +53,22 @@ public struct EmulatorView: View {
             .ignoresSafeArea(edges: .bottom)
             .onAppear { host.start() }
             .onDisappear { host.stop() }
+            .onChange(of: scenePhase) { _, phase in
+                switch phase {
+                case .inactive, .background:
+                    // Snapshot on .inactive as well as .background: it fires
+                    // first and is where the system is most generous with time.
+                    // Writing twice is harmless — the encode is sub-millisecond
+                    // and the write is atomic.
+                    host.persistForBackgrounding()
+                    host.isPaused = true
+                case .active:
+                    // Do not un-pause if the menu is what paused us.
+                    if !showMenu { host.isPaused = false }
+                @unknown default:
+                    break
+                }
+            }
             .overlay(alignment: .topLeading) {
                 if showDiagnostics { diagnostics }
             }

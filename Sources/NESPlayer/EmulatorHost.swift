@@ -45,6 +45,20 @@ public final class EmulatorHost: ObservableObject {
     private let saveURL: URL?
     private var framesSinceSaveCheck = 0
 
+    private let autoResumeURL: URL?
+    private var framesSinceAutoResume = 0
+
+    /// Whether the game snapshots itself so it can pick up exactly where it was
+    /// left. On by default: on a phone, sessions are short and interrupted, and
+    /// Zelda's own save only records progress at coarse checkpoints.
+    @Published public var autoResumeEnabled = true {
+        didSet {
+            if !autoResumeEnabled, let autoResumeURL {
+                AutoResume.clear(at: autoResumeURL)
+            }
+        }
+    }
+
     // MARK: Lifecycle
 
     /// - Parameters:
@@ -67,10 +81,54 @@ public final class EmulatorHost: ObservableObject {
         romHash = G.expectedROMHash
         gameName = G.romResourceName
         self.saveURL = cartridge.hasBattery ? saveURL : nil
+        autoResumeURL = AutoResume.url(for: G.romResourceName)
         isMuted = LaunchOptions.startMuted
 
         loadBatterySave()
+        restoreAutoResume()
         renderCurrentFrame()
+    }
+
+    // MARK: Auto-resume
+
+    /// Picks up where the player left off, if a snapshot is waiting.
+    ///
+    /// Silent by design — the game simply is where it was. Any failure falls
+    /// through to a normal boot rather than surfacing an error, because a
+    /// stale or unreadable snapshot is not something a player can act on.
+    @discardableResult
+    public func restoreAutoResume() -> Bool {
+        guard autoResumeEnabled,
+              let autoResumeURL,
+              let state = AutoResume.read(from: autoResumeURL)
+        else { return false }
+
+        do {
+            // The hash check refuses a snapshot from a different dump, which
+            // would otherwise load as convincing nonsense.
+            try nes.restoreState(state, romHash: romHash)
+            renderCurrentFrame()
+            return true
+        } catch {
+            print("auto-resume: ignoring snapshot — \(error)")
+            AutoResume.clear(at: autoResumeURL)
+            return false
+        }
+    }
+
+    /// Snapshots the machine. Call when backgrounding, and periodically.
+    public func saveAutoResume() {
+        guard autoResumeEnabled, let autoResumeURL else { return }
+        // Capturing is a cheap array copy on the main actor; encoding and
+        // writing happen off it so the frame loop never stalls on I/O.
+        AutoResume.write(nes.captureState(romHash: romHash), to: autoResumeURL)
+    }
+
+    /// Everything that must be persisted before the app may be suspended or
+    /// killed: cartridge battery RAM and the resume snapshot.
+    public func persistForBackgrounding() {
+        saveBatterySave()
+        saveAutoResume()
     }
 
     public func start() {
@@ -85,7 +143,7 @@ public final class EmulatorHost: ObservableObject {
         clock?.stop()
         clock = nil
         audio.stop()
-        saveBatterySave()
+        persistForBackgrounding()
     }
 
     // MARK: Frame loop
@@ -116,6 +174,15 @@ public final class EmulatorHost: ObservableObject {
         if framesSinceSaveCheck >= 180 {
             framesSinceSaveCheck = 0
             saveBatterySave()
+        }
+
+        // Snapshot periodically as a backstop. Backgrounding writes one anyway;
+        // this covers the cases where no notification arrives — an
+        // out-of-memory kill, a crash, or a force quit.
+        framesSinceAutoResume += 1
+        if framesSinceAutoResume >= AutoResume.intervalFrames {
+            framesSinceAutoResume = 0
+            saveAutoResume()
         }
     }
 

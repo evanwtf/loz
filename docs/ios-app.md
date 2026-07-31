@@ -124,3 +124,29 @@ in the app — see [#14](../../../issues/14).
 Free Apple ID signing gives a 7-day provisioning profile; a paid developer
 account gives a year. Set your team in the target's signing settings, then run
 to a connected device. The bundle identifier is `wtf.evan.loz.zelda`.
+
+## Auto-resume
+
+The app snapshots itself so switching away and coming back lands exactly where
+you left, with no explicit save. This is what makes a 1986 game workable on a
+phone: sessions are short and interrupted, and Zelda's own save only records
+progress at coarse checkpoints — it will not put you back mid-dungeon-room.
+
+| When | Why |
+|---|---|
+| Scene phase `.inactive` and `.background` | The normal path. `.inactive` fires first and is where the system is most generous with time. |
+| Every 20 seconds while playing | Backstop for cases where no notification arrives: out-of-memory kill, crash, force quit. |
+| On `stop()` | Alongside the cartridge battery save. |
+
+A snapshot is ~56 KB and encodes in well under a millisecond. Capture is a cheap
+array copy on the main actor; **encoding and file I/O happen off it**, so the
+frame loop never stalls on disk.
+
+Restore is silent and best-effort. A snapshot from a different ROM is refused by
+hash and deleted so it cannot be retried forever; a corrupt one is ignored and
+the game boots normally. Nothing here should ever surface an error a player
+cannot act on.
+
+Kept in its own file, separate from the four numbered save-state slots — an
+automatic write must never overwrite something the player chose to keep. There
+is a toggle in the in-game menu; turning it off deletes the snapshot.
