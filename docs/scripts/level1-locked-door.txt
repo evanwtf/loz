@@ -1,0 +1,26 @@
+# Level 1: key room $72 back east to $73, then north through the locked door.
+#
+# Starts from: room $72 cleared and the key taken ($00EB = 72, $066E = 01),
+#              which is what `nesrun clearroom` leaves behind.
+# Achieves:    $00EB = 63, and $066E back to 00 — the locked door spends the
+#              key, so the key count dropping is the proof it opened.
+#
+# $63 is NORTH of $73, not adjacent to $72. Rooms are numbered (row << 4) | col
+# exactly like overworld screens, so $72 -> $63 is two moves, not one. Reading
+# the number that way saves guessing at doors that cannot exist.
+#
+# Two alignment windows, both narrow:
+#   * the east door out of $72 needs up:32 (up:24 and up:40 both miss)
+#   * the north door of $73 needs right:64..68 — six frames wide
+
+up:32,right:220,wait:90,   # $72 -> $73, back through the east door
+
+# Link arrives inside the west door tunnel, where vertical input does nothing.
+# Stepping right into the room proper first is what makes the rest work; every
+# attempt that adjusted vertically before this returned the identical position,
+# which is the signature of input having no effect at all.
+right:30,
+up:12,                     # into the clear lane between statue rows
+right:66,                  # line up with the north door (window is 64..68)
+up:240,
+wait:120                   # locked-door animation plus the room scroll

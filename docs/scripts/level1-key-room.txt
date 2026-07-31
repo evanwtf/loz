@@ -1,0 +1,17 @@
+# Level 1: entrance room $73 west into the key room $72.
+#
+# Starts from: the state left by to-level1.txt ($00EB = 73).
+# Achieves:    $00EB = 72. The key itself is not taken by this script —
+#              room $72 has three Keese, and a fixed script cannot fight.
+#              Run `nesrun clearroom` next; see README.md in this directory.
+#
+# Dungeon doorways are far less forgiving than overworld screen edges. Link
+# reaches the west wall easily and then sits beside the door rather than in it:
+# the alignment window here is about 8 frames of vertical adjustment wide
+# (up:10 and up:14 pass, up:6 and up:18 do not).
+
+up:60,               # clear the statue row
+left:200,            # cross to the west wall
+up:12,               # line up with the door mouth — the whole trick
+left:80,             # through
+wait:90              # let $00EB settle before anything reads it
