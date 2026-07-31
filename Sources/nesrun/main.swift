@@ -11,12 +11,14 @@ func usage() -> Never {
       nesrun info    <rom.nes>
       nesrun analyze <rom.nes>
       nesrun disasm  <rom.nes> --bank <n> [--out <file.asm>]
+      nesrun run     <rom.nes> [--frames <n>] [--out <frame.ppm>]
 
     COMMANDS:
       info     Parse the iNES header and print cartridge geometry.
       analyze  Recursive-descent trace from the interrupt vectors; reports
                code/data split and the routine inventory.
       disasm   Emit an annotated listing for one 16KB PRG bank.
+      run      Boot the ROM headlessly for N frames and dump the framebuffer.
     """)
     exit(1)
 }
@@ -112,6 +114,98 @@ case "disasm":
         print(text)
     }
 
+case "run":
+    let frames = Int(flag("--frames", in: args) ?? "60") ?? 60
+    let outPath = flag("--out", in: args) ?? "frame.ppm"
+
+    let nes: NES
+    do {
+        nes = try NES(cartridge: cartridge)
+    } catch {
+        FileHandle.standardError.write("error: \(error)\n".data(using: .utf8)!)
+        exit(1)
+    }
+
+    // Scripted input: "--press start@70,a@200" holds each button for 8 frames
+    // from the given frame. Enough to drive past menus and reach gameplay,
+    // which is where scrolling and sprite-0 hit actually get exercised.
+    var presses: [(button: NESButton, frame: Int)] = []
+    if let script = flag("--press", in: args) {
+        for entry in script.split(separator: ",") {
+            let parts = entry.split(separator: "@")
+            guard parts.count == 2, let atFrame = Int(parts[1]) else { continue }
+            let button: NESButton? = switch parts[0].lowercased() {
+            case "a": .a
+            case "b": .b
+            case "start": .start
+            case "select": .select
+            case "up": .up
+            case "down": .down
+            case "left": .left
+            case "right": .right
+            default: nil
+            }
+            if let button { presses.append((button, atFrame)) }
+        }
+    }
+
+    print("Booting \(romPath) for \(frames) frames...")
+    let start = Date()
+    for frame in 0..<frames {
+        for press in presses {
+            if frame == press.frame { nes.controller1.press(press.button) }
+            if frame == press.frame + 8 { nes.controller1.release(press.button) }
+        }
+        nes.stepFrame()
+    }
+    let elapsed = Date().timeIntervalSince(start)
+
+    let fps = Double(frames) / elapsed
+    print(String(format: "Ran %d frames in %.2fs — %.0f fps (%.0fx real time)",
+                 frames, elapsed, fps, fps / 60.0))
+    print(String(format: "CPU cycles: %d   PPU frame: %d", nes.cycles, nes.ppu.frame))
+
+    // Distinct colours in the output is the quickest signal that the PPU is
+    // doing something rather than emitting a flat field.
+    let unique = Set(nes.framebuffer)
+    print("Distinct colours on screen: \(unique.count)")
+
+    let bg = (0..<16).map { String(format: "%02X", nes.ppu.paletteRAM[$0]) }
+    let sp = (16..<32).map { String(format: "%02X", nes.ppu.paletteRAM[$0]) }
+    print("Palette BG:  \(bg.joined(separator: " "))")
+    print("Palette SPR: \(sp.joined(separator: " "))")
+    print(String(format: "PPUCTRL: %02X  PPUMASK: %02X",
+                 nes.ppu.control.rawValue, nes.ppu.mask.rawValue))
+
+    writePPM(nes.framebuffer, to: outPath)
+    print("Wrote \(outPath)")
+
+case "paltrace":
+    // Diagnostic: log every write that reaches palette memory, so a transfer
+    // landing at the wrong address is immediately visible.
+    let limit = Int(flag("--frames", in: args) ?? "45") ?? 45
+    let nes = try! NES(cartridge: cartridge)
+    var frame = 0
+    var lines: [String] = []
+    nes.ppu.onPaletteWrite = { addr, value in
+        lines.append(String(format: "f%-3d $%04X <- $%02X", frame, addr, value))
+    }
+    for _ in 0..<limit { nes.stepFrame(); frame += 1 }
+    print("\(lines.count) palette writes in \(limit) frames")
+    for line in lines.prefix(80) { print("  \(line)") }
+
 default:
     usage()
+}
+
+/// Dumps the framebuffer as a binary PPM — trivially viewable and needs no
+/// image library.
+func writePPM(_ framebuffer: [UInt32], to path: String) {
+    var data = Data("P6\n256 240\n255\n".utf8)
+    for pixel in framebuffer {
+        data.append(UInt8(pixel & 0xFF))          // R
+        data.append(UInt8((pixel >> 8) & 0xFF))   // G
+        data.append(UInt8((pixel >> 16) & 0xFF))  // B
+    }
+    try? data.write(to: URL(fileURLWithPath: path))
 }

@@ -89,6 +89,10 @@ public final class PPU {
 
     private let mapper: Mapper
 
+    /// Debug hook: every write that reaches palette memory, with the resolved
+    /// address. Used to diagnose transfers that land at the wrong offset.
+    public var onPaletteWrite: ((UInt16, UInt8) -> Void)?
+
     public init(mapper: Mapper) {
         self.mapper = mapper
     }
@@ -149,6 +153,7 @@ public final class PPU {
         case 0x2000...0x3EFF:
             vram[mapper.mirroring.vramIndex(for: addr & 0x2FFF)] = value
         default:
+            onPaletteWrite?(addr, value)
             paletteRAM[Int(paletteIndex(addr))] = value
         }
     }
@@ -366,7 +371,9 @@ public final class PPU {
         for index in 0..<64 {
             let base = index * 4
             let spriteY = Int(oam[base])
-            let row = targetScanline - spriteY
+            // OAM stores Y minus one: a sprite at Y occupies scanlines
+            // Y+1 through Y+height, so the pattern row lags by one.
+            let row = targetScanline - spriteY - 1
             guard row >= 0 && row < height else { continue }
 
             if spriteCount == 8 {
