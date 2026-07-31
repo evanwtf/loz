@@ -26,6 +26,9 @@ public enum Zelda: GameDefinition {
         0x0070: "linkPositionX",
         0x0084: "linkPositionY",
 
+        // Facing direction as a bitmask: up = 8, down = 4, left = 2, right = 1.
+        0x0098: "linkFacing",
+
         // Current screen. On the overworld this is (row << 4) | column across
         // a 16x8 grid — Link starts at $77. Inside a dungeon it is the room
         // number instead; Level 1's entrance room is $73.
