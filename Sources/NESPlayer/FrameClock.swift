@@ -5,6 +5,10 @@ import QuartzCore
     import AppKit
 #endif
 
+#if canImport(UIKit)
+    import UIKit
+#endif
+
 /// Drives the emulator at display refresh, with a timer fallback.
 ///
 /// `CADisplayLink` is the right primitive — it is phase-locked to the display,
@@ -43,7 +47,7 @@ final class FrameClock {
     func start() {
         guard !isRunning else { return }
 
-        if let link = Self.makeDisplayLink(target: self, selector: #selector(tick)) {
+        if let (link, hardwareMax) = Self.makeDisplayLink(target: self, selector: #selector(tick)) {
             // Pin to 60 Hz. A display link defaults to the display's maximum
             // rate, so on a ProMotion device it fires at 120 — and because each
             // callback steps a whole NES frame, the game ran at double speed
@@ -61,7 +65,10 @@ final class FrameClock {
             link.add(to: .main, forMode: .common)
             displayLink = link
             startWatchdog()
-            Log.clock.notice("display link at 60 Hz (max available \(link.preferredFrameRateRange.maximum, privacy: .public) Hz)")
+            // The hardware maximum, not the requested rate: paired with the
+            // fps reading, this is what tells a 60 Hz pin that was honoured
+            // apart from one that was ignored.
+            Log.clock.notice("display link at 60 Hz (hardware max \(hardwareMax, privacy: .public) Hz)")
         } else {
             startTimer()
             Log.clock.notice("no display link available — using timer fallback")
@@ -88,6 +95,12 @@ final class FrameClock {
         // that emulates once per refresh silently changes the speed of the game
         // depending on the display it is attached to. The tolerance absorbs
         // ordinary jitter so a frame arriving slightly early is not dropped.
+        //
+        // The guarantee is "never fast", not "always 60": a delivered rate
+        // that 16.67 ms does not divide (90, 144 Hz) aliases the threshold
+        // into slow motion. Apple displays are 60 or 120 — an exact multiple —
+        // and the pin floors at 60, so this only bites on an external display
+        // that ignores the request.
         guard now - lastEmulatedFrame >= interval * 0.9 else { return }
         lastEmulatedFrame = now
         onTick()
@@ -119,15 +132,24 @@ final class FrameClock {
         }
     }
 
-    private static func makeDisplayLink(target: Any, selector: Selector) -> CADisplayLink? {
+    /// Vends a link for the current display along with the fastest rate that
+    /// display can fire. The rate is purely diagnostic: the log line records
+    /// it so a misbehaving pin can be told apart from a 60 Hz panel.
+    private static func makeDisplayLink(
+        target: Any,
+        selector: Selector
+    ) -> (link: CADisplayLink, hardwareMaxRate: Int)? {
         #if canImport(AppKit)
             // Prefer the screen the app is actually on; fall back to any screen.
             let screen = NSApplication.shared.keyWindow?.screen
                 ?? NSScreen.main
                 ?? NSScreen.screens.first
-            return screen?.displayLink(target: target, selector: selector)
+            guard let link = screen?.displayLink(target: target, selector: selector)
+            else { return nil }
+            return (link, screen?.maximumFramesPerSecond ?? 0)
         #else
-            return CADisplayLink(target: target, selector: selector)
+            return (CADisplayLink(target: target, selector: selector),
+                    UIScreen.main.maximumFramesPerSecond)
         #endif
     }
 }
