@@ -29,12 +29,20 @@ public protocol Mapper: AnyObject {
 
     /// True while the mapper is asserting the CPU's IRQ line.
     var irqAsserted: Bool { get }
+
+    /// Bank-selection registers, for save states. Mappers with no state — NROM —
+    /// use the empty default.
+    var persistentState: [UInt8] { get set }
 }
 
 extension Mapper {
     public var currentPRGBank: Int { 0 }
     public func ppuAddressChanged(_ address: UInt16) {}
     public var irqAsserted: Bool { false }
+    public var persistentState: [UInt8] {
+        get { [] }
+        set { }
+    }
 }
 
 /// Mapper 0. No banking — useful as a sanity target for test ROMs.

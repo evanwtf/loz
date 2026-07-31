@@ -567,6 +567,19 @@ public final class PPU {
         }
     }
 
+    /// Current $2007 read buffer, exposed for snapshotting.
+    var readBufferValue: UInt8 { readBuffer }
+
+    /// Restores the fields that are otherwise private to the clock.
+    func restore(readBuffer: UInt8, scanline: Int, dot: Int, frame: Int) {
+        self.readBuffer = readBuffer
+        self.scanline = scanline
+        self.dot = dot
+        self.frame = frame
+        frameComplete = false
+        nmiRequested = false
+    }
+
     public func reset() {
         control = []
         mask = []

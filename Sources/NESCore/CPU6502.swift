@@ -131,6 +131,14 @@ public final class CPU6502 {
         totalCycles += count
     }
 
+    /// Restores cycle counters when loading a snapshot.
+    func restoreCycles(total: Int, stall: Int) {
+        totalCycles = total
+        stallCycles = stall
+        pendingNMI = false
+        pendingIRQ = false
+    }
+
     /// Latched by the PPU at the start of vblank.
     public func triggerNMI() { pendingNMI = true }
     /// Level-triggered; the APU/mapper assert and release it.

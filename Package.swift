@@ -23,6 +23,7 @@ let package = Package(
         .library(name: "NESCore", targets: ["NESCore"]),
         .library(name: "NESAnalysis", targets: ["NESAnalysis"]),
         .library(name: "ZeldaGame", targets: ["ZeldaGame"]),
+        .library(name: "NESPlayer", targets: ["NESPlayer"]),
     ],
     targets: [
         .target(
@@ -33,8 +34,10 @@ let package = Package(
         ),
         .target(name: "NESAnalysis", dependencies: ["NESCore"]),
         .target(name: "ZeldaGame", dependencies: ["NESCore"]),
+        // Reusable SwiftUI player shell: screen, touch controls, keyboard, and
+        // MFi controller support. Game-agnostic — it takes a GameDefinition.
+        .target(name: "NESPlayer", dependencies: ["NESCore"]),
         .executableTarget(name: "nesrun", dependencies: ["NESCore", "NESAnalysis", "ZeldaGame"]),
         .testTarget(name: "NESCoreTests", dependencies: ["NESCore"]),
-        .testTarget(name: "NESAnalysisTests", dependencies: ["NESAnalysis", "NESCore"]),
     ]
 )

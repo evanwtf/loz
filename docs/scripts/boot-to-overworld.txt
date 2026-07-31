@@ -1,0 +1,1 @@
+wait:80,start:4,wait:40,start:4,wait:40,a:4,wait:20,select:4,wait:16,select:4,wait:16,select:4,wait:16,right:4,wait:16,start:6,wait:60,start:6,wait:180

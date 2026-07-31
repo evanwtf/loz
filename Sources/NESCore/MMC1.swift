@@ -38,6 +38,18 @@ public final class MMC1: Mapper {
     /// On SNROM, bit 4 of the PRG bank register disables WRAM.
     private var prgRAMEnabled: Bool { (prgBank & 0x10) == 0 }
 
+    public var persistentState: [UInt8] {
+        get { [shiftRegister, control, chrBank0, chrBank1, prgBank] }
+        set {
+            guard newValue.count == 5 else { return }
+            shiftRegister = newValue[0]
+            control = newValue[1]
+            chrBank0 = newValue[2]
+            chrBank1 = newValue[3]
+            prgBank = newValue[4]
+        }
+    }
+
     public var currentPRGBank: Int {
         let bankCount = cartridge.prgBankCount16K
         let selected = Int(prgBank & 0x0F) % bankCount

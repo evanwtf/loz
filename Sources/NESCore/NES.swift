@@ -16,7 +16,7 @@ public final class NES {
     public private(set) var cpu: CPU6502!
 
     /// Total CPU cycles since power-on.
-    public private(set) var cycles = 0
+    public internal(set) var cycles = 0
 
     /// Routines that have been decompiled to Swift. When the CPU reaches a
     /// registered address the native version runs instead of the interpreter.
@@ -26,6 +26,13 @@ public final class NES {
     /// Counts how often each native routine ran — useful for confirming a
     /// conversion is actually on the hot path before optimising it.
     public private(set) var nativeCallCounts: [RoutineKey: Int] = [:]
+
+    /// Called with (bank, PC) before each instruction when set.
+    ///
+    /// This is how playing the game discovers code: static analysis cannot see
+    /// past Zelda's indirect dispatchers, but execution can. Nil by default so
+    /// the normal path costs one branch.
+    public var onInstruction: ((Int, UInt16) -> Void)?
 
     public init(cartridge: Cartridge) throws {
         self.cartridge = cartridge
@@ -50,6 +57,9 @@ public final class NES {
     /// Runs one CPU instruction and the three-times-faster PPU alongside it.
     @discardableResult
     public func step() -> Int {
+        if let observer = onInstruction, cpu.stallCycles == 0 {
+            observer(mapper.currentPRGBank, cpu.pc)
+        }
         let cpuCycles = dispatchNativeRoutine() ?? cpu.step()
 
         for _ in 0..<(cpuCycles * 3) {

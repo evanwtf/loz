@@ -1,0 +1,158 @@
+import Foundation
+import CoreGraphics
+import QuartzCore
+import Combine
+import NESCore
+
+#if canImport(AppKit)
+import AppKit
+#endif
+
+/// Drives one game: clocks the emulator at display refresh, publishes frames,
+/// routes input, and persists battery-backed saves.
+///
+/// Runs entirely on the main actor. The emulator has roughly 14x real-time
+/// headroom, so there is no reason to introduce a second thread and the data
+/// races that come with it.
+@MainActor
+public final class EmulatorHost: ObservableObject {
+
+    public let nes: NES
+    public let title: String
+
+    @Published public private(set) var frame: CGImage?
+    @Published public private(set) var framesPerSecond: Double = 0
+    @Published public var isPaused = false
+
+    /// Multiplies emulation speed; held down for fast-forward.
+    @Published public var speedMultiplier: Int = 1
+
+    private var displayLink: CADisplayLink?
+    private var lastFPSSample = CFAbsoluteTimeGetCurrent()
+    private var framesSinceSample = 0
+
+    private let saveURL: URL?
+    private var framesSinceSaveCheck = 0
+
+    // MARK: Lifecycle
+
+    /// - Parameters:
+    ///   - game: the single game this app plays.
+    ///   - romData: raw iNES image, validated against the game's expected hash.
+    ///   - saveURL: where battery-backed RAM is persisted, if the cart has any.
+    public init<G: GameDefinition>(
+        game: G.Type,
+        romData: [UInt8],
+        saveURL: URL? = nil
+    ) throws {
+        let cartridge = try Cartridge(data: romData)
+        try G.validate(romData: romData, cartridge: cartridge)
+
+        self.nes = try NES(cartridge: cartridge)
+        self.nes.nativeRoutines = G.nativeRoutines
+        self.title = G.title
+        self.saveURL = cartridge.hasBattery ? saveURL : nil
+
+        loadBatterySave()
+        renderCurrentFrame()
+    }
+
+    public func start() {
+        guard displayLink == nil else { return }
+        let link = Self.makeDisplayLink(target: self, selector: #selector(tick))
+        link?.add(to: .main, forMode: .common)
+        displayLink = link
+    }
+
+    public func stop() {
+        displayLink?.invalidate()
+        displayLink = nil
+        saveBatterySave()
+    }
+
+    private static func makeDisplayLink(target: Any, selector: Selector) -> CADisplayLink? {
+        #if canImport(AppKit)
+        // CADisplayLink arrived on macOS in 14.0 and is vended by the screen.
+        return NSScreen.main?.displayLink(target: target, selector: selector)
+        #else
+        return CADisplayLink(target: target, selector: selector)
+        #endif
+    }
+
+    // MARK: Frame loop
+
+    @objc private func tick() {
+        guard !isPaused else { return }
+
+        for _ in 0..<max(1, speedMultiplier) {
+            nes.stepFrame()
+        }
+        renderCurrentFrame()
+
+        framesSinceSample += 1
+        let now = CFAbsoluteTimeGetCurrent()
+        let elapsed = now - lastFPSSample
+        if elapsed >= 0.5 {
+            framesPerSecond = Double(framesSinceSample) / elapsed
+            framesSinceSample = 0
+            lastFPSSample = now
+        }
+
+        // Flush the save file periodically rather than on every write, so a
+        // crash costs at most a couple of seconds of progress.
+        framesSinceSaveCheck += 1
+        if framesSinceSaveCheck >= 180 {
+            framesSinceSaveCheck = 0
+            saveBatterySave()
+        }
+    }
+
+    private func renderCurrentFrame() {
+        frame = FrameRenderer.image(from: nes.framebuffer)
+    }
+
+    // MARK: Input
+
+    public func setButton(_ button: NESButton, pressed: Bool, player: Int = 1) {
+        let pad = player == 2 ? nes.controller2 : nes.controller1
+        pad.set(button, pressed: pressed)
+    }
+
+    public func releaseAllButtons() {
+        nes.controller1.releaseAll()
+        nes.controller2.releaseAll()
+    }
+
+    public func reset() {
+        nes.reset()
+    }
+
+    // MARK: Battery save
+
+    private func loadBatterySave() {
+        guard let saveURL, let data = try? Data(contentsOf: saveURL) else { return }
+        let bytes = [UInt8](data)
+        guard bytes.count == nes.cartridge.prgRAM.count else { return }
+        nes.cartridge.prgRAM = bytes
+    }
+
+    public func saveBatterySave() {
+        guard let saveURL else { return }
+        try? Data(nes.cartridge.prgRAM).write(to: saveURL, options: .atomic)
+    }
+
+    /// Default save location inside the app's Application Support directory.
+    public static func defaultSaveURL(for resourceName: String) -> URL? {
+        guard let base = try? FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        ) else { return nil }
+
+        let directory = base.appendingPathComponent("loz", isDirectory: true)
+        try? FileManager.default.createDirectory(
+            at: directory, withIntermediateDirectories: true)
+        return directory.appendingPathComponent("\(resourceName).sav")
+    }
+}

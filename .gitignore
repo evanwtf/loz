@@ -23,3 +23,6 @@ build/
 # Emulator debug output
 *.ppm
 Captures/
+
+# Emulator snapshots embed CHR-RAM (game data); regenerate from docs/scripts/
+*.state
