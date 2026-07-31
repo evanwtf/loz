@@ -28,6 +28,24 @@ public final class EmulatorHost: ObservableObject {
     @Published public private(set) var framesPerSecond: Double = 0
     @Published public var isPaused = false
 
+    /// Where a frame's time went, refreshed every 120 frames.
+    ///
+    /// Published as well as logged because pulling the unified log off a
+    /// physical device needs root, which makes the log useless in the exact
+    /// situation it was added for — someone holding the phone, reproducing the
+    /// bug. On screen the numbers are simply there.
+    public struct FrameProfile: Equatable {
+        public var emulateMS: Double = 0
+        public var renderMS: Double = 0
+        /// Mean spacing between ticks. Should sit at 16.67 ms.
+        public var gapMS: Double = 0
+        public var worstGapMS: Double = 0
+        /// Ticks in the last sample that missed a 60 Hz refresh.
+        public var lateTicks: Int = 0
+    }
+
+    @Published public private(set) var profile = FrameProfile()
+
     /// Multiplies emulation speed; held down for fast-forward.
     @Published public var speedMultiplier: Int = 1
 
@@ -35,10 +53,23 @@ public final class EmulatorHost: ObservableObject {
     private var lastFPSSample = CFAbsoluteTimeGetCurrent()
     private var framesSinceSample = 0
 
-    /// Frame-budget accounting, populated only while diagnostics are on.
+    /// Frame-budget accounting. Always on: two clock reads per frame cost
+    /// nothing measurable, and gating it behind a launch option meant the one
+    /// run that reproduced a bug was the run with no numbers. Chasing input
+    /// latency without this has now cost several rounds of guessing.
     private var profileEmulation: Double = 0
     private var profileRender: Double = 0
     private var profileFrames = 0
+    /// Gap between consecutive ticks. This is the measurement that separates
+    /// the two candidate explanations for late input: work *inside* the tick
+    /// (emulate/render, below) versus work the main thread does after it
+    /// returns — SwiftUI re-evaluating the view tree, which no timer around
+    /// `tick()` can see. If the gaps run long while emulate+render stay
+    /// small, the cost is outside this class.
+    private var lastTickStart: Double = 0
+    private var profileGap: Double = 0
+    private var profileWorstGap: Double = 0
+    private var profileLateTicks = 0
 
     private let audio: AudioOutput
     /// Muting stops audio reaching the speaker but keeps the APU running, so
@@ -173,41 +204,57 @@ public final class EmulatorHost: ObservableObject {
     public func tick() {
         guard !isPaused else { return }
 
-        // Where the frame budget actually goes. Only measured when diagnostics
-        // are on: "input takes ten seconds to register" has several possible
-        // causes with completely different fixes — emulation too slow, the
-        // render path too slow, or the clock not firing — and guessing between
+        // Where the frame budget actually goes. "Input takes half a second to
+        // register" has several possible causes with completely different
+        // fixes — emulation too slow, the render path too slow, the clock not
+        // firing, or the main thread busy elsewhere — and guessing between
         // them from the outside wastes far more time than measuring.
-        let profiling = LaunchOptions.showDiagnostics
-        let tickStart = profiling ? CFAbsoluteTimeGetCurrent() : 0
+        let tickStart = CFAbsoluteTimeGetCurrent()
+        if lastTickStart > 0 {
+            let gap = tickStart - lastTickStart
+            profileGap += gap
+            profileWorstGap = max(profileWorstGap, gap)
+            // Anything past 20 ms missed a 60 Hz refresh.
+            if gap > 0.020 { profileLateTicks += 1 }
+        }
+        lastTickStart = tickStart
 
         for _ in 0..<max(1, speedMultiplier) {
             nes.stepFrame()
             drainAudio()
         }
-        let afterEmulation = profiling ? CFAbsoluteTimeGetCurrent() : 0
+        let afterEmulation = CFAbsoluteTimeGetCurrent()
         renderCurrentFrame()
 
-        if profiling {
-            let now = CFAbsoluteTimeGetCurrent()
-            profileEmulation += afterEmulation - tickStart
-            profileRender += now - afterEmulation
-            profileFrames += 1
-            if profileFrames >= 120 {
-                let n = Double(profileFrames)
-                let fps = framesPerSecond
-                let emulateMS = profileEmulation / n * 1000
-                let renderMS = profileRender / n * 1000
-                Log.clock.notice("""
-                perf: \(fps, format: .fixed(precision: 1), privacy: .public) fps  \
-                emulate \(emulateMS, format: .fixed(precision: 2), privacy: .public) ms  \
-                render \(renderMS, format: .fixed(precision: 2), privacy: .public) ms  \
-                budget 16.67 ms
-                """)
-                profileEmulation = 0
-                profileRender = 0
-                profileFrames = 0
-            }
+        let afterRender = CFAbsoluteTimeGetCurrent()
+        profileEmulation += afterEmulation - tickStart
+        profileRender += afterRender - afterEmulation
+        profileFrames += 1
+        if profileFrames >= 120 {
+            let n = Double(profileFrames)
+            let fps = framesPerSecond
+            let emulateMS = profileEmulation / n * 1000
+            let renderMS = profileRender / n * 1000
+            let gapMS = profileGap / n * 1000
+            let worstMS = profileWorstGap * 1000
+            let late = profileLateTicks
+            profile = FrameProfile(
+                emulateMS: emulateMS, renderMS: renderMS,
+                gapMS: gapMS, worstGapMS: worstMS, lateTicks: late)
+            Log.clock.notice("""
+            perf: \(fps, format: .fixed(precision: 1), privacy: .public) fps  \
+            emulate \(emulateMS, format: .fixed(precision: 2), privacy: .public) ms  \
+            render \(renderMS, format: .fixed(precision: 2), privacy: .public) ms  \
+            gap avg \(gapMS, format: .fixed(precision: 2), privacy: .public) ms \
+            worst \(worstMS, format: .fixed(precision: 1), privacy: .public) ms  \
+            late \(late, privacy: .public)/120  budget 16.67 ms
+            """)
+            profileEmulation = 0
+            profileRender = 0
+            profileFrames = 0
+            profileGap = 0
+            profileWorstGap = 0
+            profileLateTicks = 0
         }
 
         framesSinceSample += 1

@@ -109,6 +109,16 @@ import SwiftUI
         let host: EmulatorHost
         @State private var active: NESButton = []
 
+        /// Where each direction's pressed indicator sits, as a fraction of the
+        /// pad's edge. Pulled in from the arm tips so a thumb resting on an arm
+        /// does not cover its own feedback.
+        private static let arms: [(button: NESButton, unit: CGPoint)] = [
+            (.up, CGPoint(x: 0.50, y: 0.28)),
+            (.down, CGPoint(x: 0.50, y: 0.72)),
+            (.left, CGPoint(x: 0.28, y: 0.50)),
+            (.right, CGPoint(x: 0.72, y: 0.50)),
+        ]
+
         var body: some View {
             GeometryReader { geometry in
                 let size = min(geometry.size.width, geometry.size.height)
@@ -120,6 +130,19 @@ import SwiftUI
                     Image(systemName: "dpad")
                         .resizable()
                         .foregroundStyle(.white.opacity(0.5))
+                    // A thumb covers the arm it is pressing, so the pad gave no
+                    // feedback at all: "I can't tell if down is being pressed"
+                    // is unanswerable while the only signal is under a finger.
+                    // These sit inboard of the arms, where they stay visible.
+                    ForEach(0..<Self.arms.count, id: \.self) { index in
+                        let arm = Self.arms[index]
+                        if active.contains(arm.button) {
+                            Circle()
+                                .fill(.white.opacity(0.9))
+                                .frame(width: size * 0.13, height: size * 0.13)
+                                .position(x: arm.unit.x * size, y: arm.unit.y * size)
+                        }
+                    }
                 }
                 .frame(width: size, height: size)
                 .contentShape(Rectangle())

@@ -186,6 +186,18 @@ public struct EmulatorView: View {
     private var diagnostics: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(String(format: "%.0f fps", host.framesPerSecond))
+            // The frame budget, on screen. `gap` is the one that matters for
+            // input latency: it is the spacing between ticks, so it counts
+            // main-thread work this class never sees — SwiftUI re-evaluating
+            // the view tree, chiefly. emulate+render small but gap large means
+            // the cost is outside the emulator, and no amount of making the
+            // emulator faster will help.
+            Text(String(format: "emu %.1f  img %.1f ms",
+                        host.profile.emulateMS, host.profile.renderMS))
+            Text(String(format: "gap %.1f  max %.0f ms",
+                        host.profile.gapMS, host.profile.worstGapMS))
+            Text("late \(host.profile.lateTicks)/120")
+                .foregroundStyle(host.profile.lateTicks > 6 ? .red : .green)
             Text("bank \(host.nes.mapper.currentPRGBank)")
             Text(String(format: "PC $%04X", host.nes.cpu.pc))
             Text("scanline \(host.nes.ppu.scanline)")
