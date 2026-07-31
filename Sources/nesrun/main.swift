@@ -600,7 +600,21 @@ func runInputScript(
 ) {
     var segments: [(buttons: NESButton, frames: Int)] = []
 
-    for segment in (script ?? "wait:60").split(separator: ",") {
+    // Strip `#` comments and line breaks so a script can be kept in a file with
+    // a header explaining what it does and what proves it worked. Routes are
+    // expensive to re-derive by hand; a bare one-line script that nobody can
+    // read is how that knowledge gets lost.
+    //
+    // Lines are joined with a comma, not concatenated, so a script may break
+    // across lines without every line needing a trailing comma. Empty segments
+    // — from comment-only lines or a trailing comma — are dropped by `split`.
+    let cleaned = (script ?? "wait:60")
+        .split(separator: "\n", omittingEmptySubsequences: false)
+        .map { $0.prefix(while: { $0 != "#" }) }
+        .joined(separator: ",")
+        .filter { !$0.isWhitespace }
+
+    for segment in cleaned.split(separator: ",") {
         let parts = segment.split(separator: ":")
         guard parts.count == 2, let frames = Int(parts[1].trimmingCharacters(in: .whitespaces))
         else {

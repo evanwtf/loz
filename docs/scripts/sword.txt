@@ -1,0 +1,18 @@
+# Sword route — the wooden sword from the cave on the starting screen.
+#
+# Starts from: the state left by boot-to-overworld.txt (screen $77).
+# Achieves:    $0657 = 01 (sword owned), Link back outside at the cave mouth.
+#
+# The cave is up and to the LEFT of where Link starts, not straight up —
+# walking straight up leaves the screen north to $67 instead.
+#
+# Caves do NOT change $00EB. It stays $77 the whole way through, so the sword
+# byte is the only thing that proves this worked.
+
+left:42,             # line up with the cave mouth (x $70)
+up:160,              # walk in; Link is placed at the bottom of the cave room
+wait:260,            # the old man's text locks input until it finishes typing
+right:6,             # line up with the sword (x $78); at x $70 he walks past it
+up:70,               # touch the sword -> $0657 = 01
+wait:60,
+down:150             # back out of the cave onto the overworld
