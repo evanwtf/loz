@@ -1,0 +1,25 @@
+# ROMs — keep copyrighted game data out of version control.
+# The emulator loads zelda.nes from disk at runtime; it is never committed.
+*.nes
+*.sav
+*.srm
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode
+*.xcuserstate
+xcuserdata/
+DerivedData/
+*.xcscmblueprint
+*.xccheckout
+build/
+
+# macOS
+.DS_Store
+
+# Emulator debug output
+*.ppm
+Captures/
