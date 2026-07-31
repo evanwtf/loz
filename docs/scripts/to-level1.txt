@@ -1,0 +1,33 @@
+# Overworld route to Level 1, and in through the door.
+#
+# Starts from: the state left by sword.txt (screen $77, $0657 = 01).
+# Achieves:    $00EB = 73, the Level 1 entrance room.
+#
+# Screens: $77 -> $78 -> $68 -> $58 -> $48 -> $38 -> $37 -> in.
+#
+# Two things this route has to work around, both of which cost real time to
+# find and neither of which is visible from the screen number alone:
+#
+#   * Link starts each screen boxed in by bushes often enough that a sideways
+#     move does nothing at all. On $77 and again on $58 every candidate in a
+#     sweep returned the *identical* end position, which is the signature of
+#     input having no effect rather than of overshooting. Step up first, then
+#     sideways.
+#   * $38 is water with a single horizontal bridge. Overshoot the bridge row
+#     and Link walks north to $28 instead; undershoot and he stops dead at the
+#     shoreline at x $70. The window is roughly 6 frames of climb wide.
+#
+# `wait:90` after each screen change is not padding. $00EB updates during the
+# scroll, so a snapshot taken without settling records the *previous* screen —
+# which produced a state that claimed to be on $38 and behaved like $48.
+
+up:30,right:260,wait:60,     # $77 -> $78 (east; up:30 first clears the bushes)
+up:300,wait:60,              # $78 -> $68 -> $58 (north, two screens)
+up:20,right:30,up:220,wait:90,   # $58 -> $48 (up out of the bushes, then the gap)
+left:20,up:240,wait:90,      # $48 -> $38
+up:60,left:340,wait:90,      # $38 -> $37, crossing the bridge west
+right:50,up:80,wait:90       # into Level 1 -> $00EB = 73
+
+# Arrives with about 2.5 of 3 hearts: the Leevers on $38 land a hit or two and
+# the route does not stop to fight them. If a later script needs full health,
+# refill before entering rather than trying to make this leg damage-free.
