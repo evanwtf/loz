@@ -7,6 +7,7 @@ public final class NES {
     public let cartridge: Cartridge
     public let mapper: Mapper
     public let ppu: PPU
+    public let apu: APU
     public let controller1 = Controller()
     public let controller2 = Controller()
 
@@ -34,11 +35,14 @@ public final class NES {
     /// the normal path costs one branch.
     public var onInstruction: ((Int, UInt16) -> Void)?
 
-    public init(cartridge: Cartridge) throws {
+    public init(cartridge: Cartridge, sampleRate: Double = 44100) throws {
         self.cartridge = cartridge
         self.mapper = try cartridge.makeMapper()
         self.ppu = PPU(mapper: mapper)
+        self.apu = APU(sampleRate: sampleRate)
         self.cpu = CPU6502(bus: self)
+        // The DMC fetches its samples straight off the CPU bus.
+        self.apu.readMemory = { [unowned self] address in self.cpuRead(address) }
         cpu.reset()
     }
 
@@ -48,6 +52,7 @@ public final class NES {
 
     public func reset() {
         ppu.reset()
+        apu.reset()
         cpu.reset()
         cycles = 0
     }
@@ -69,8 +74,13 @@ public final class NES {
                 cpu.triggerNMI()
             }
         }
-        // Mappers with a scanline counter raise IRQ from PPU activity.
-        cpu.setIRQLine(mapper.irqAsserted)
+        for _ in 0..<cpuCycles {
+            // The DMC steals cycles from the CPU when it fetches a sample.
+            cpu.stallCycles += apu.step()
+        }
+        // Both the APU frame counter and mappers with a scanline counter can
+        // raise IRQ.
+        cpu.setIRQLine(mapper.irqAsserted || apu.irqAsserted)
 
         cycles += cpuCycles
         return cpuCycles
@@ -127,9 +137,11 @@ extension NES: CPUBus {
         case 0x4017:
             return controller2.read()
 
-        case 0x4000...0x4015:
-            // APU. Reads other than $4015 are open bus.
-            return 0
+        case 0x4015:
+            return apu.readStatus()
+
+        case 0x4000...0x4014:
+            return 0   // write-only; open bus on read
 
         default:
             return mapper.cpuRead(address) ?? 0
@@ -153,7 +165,7 @@ extension NES: CPUBus {
             controller2.write(value)
 
         case 0x4000...0x4017:
-            break   // APU, not yet implemented
+            apu.writeRegister(address, value)
 
         default:
             mapper.cpuWrite(address, value)

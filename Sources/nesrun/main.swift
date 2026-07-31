@@ -265,6 +265,88 @@ case "play":
         print("Saved state to \(statePath)")
     }
 
+case "audio":
+    // Renders the APU to a WAV so sound can actually be listened to and
+    // measured, rather than assumed to work because it compiles.
+    let seconds = Double(flag("--seconds", in: args) ?? "10") ?? 10
+    let outPath = flag("--out", in: args) ?? "audio.wav"
+    let sampleRate = 44100.0
+
+    let nes = try! NES(cartridge: cartridge, sampleRate: sampleRate)
+
+    if let statePath = flag("--load-state", in: args) {
+        let data = try! Data(contentsOf: URL(fileURLWithPath: statePath))
+        try! nes.restoreState(try! JSONDecoder().decode(SaveState.self, from: data))
+    }
+
+    var script: [(NESButton, Int)] = []
+    if let input = flag("--input", in: args) {
+        for segment in input.split(separator: ",") {
+            let parts = segment.split(separator: ":")
+            guard parts.count == 2, let frames = Int(parts[1]) else { continue }
+            var buttons: NESButton = []
+            for name in parts[0].split(separator: "+") {
+                switch name.lowercased() {
+                case "a": buttons.insert(.a)
+                case "b": buttons.insert(.b)
+                case "start": buttons.insert(.start)
+                case "select": buttons.insert(.select)
+                case "up": buttons.insert(.up)
+                case "down": buttons.insert(.down)
+                case "left": buttons.insert(.left)
+                case "right": buttons.insert(.right)
+                default: break
+                }
+            }
+            script.append((buttons, frames))
+        }
+    }
+
+    let totalFrames = Int(seconds * 60)
+    var samples: [Float] = []
+    samples.reserveCapacity(Int(seconds * sampleRate) + 4096)
+
+    var scriptIndex = 0
+    var framesIntoSegment = 0
+
+    for _ in 0..<totalFrames {
+        if scriptIndex < script.count {
+            let segment = script[scriptIndex]
+            if framesIntoSegment == 0 {
+                nes.controller1.releaseAll()
+                nes.controller1.press(segment.0)
+            }
+            framesIntoSegment += 1
+            if framesIntoSegment >= segment.1 {
+                scriptIndex += 1
+                framesIntoSegment = 0
+            }
+        } else {
+            nes.controller1.releaseAll()
+        }
+
+        nes.stepFrame()
+        // Drain each frame so the ring buffer never overflows.
+        let ready = nes.apu.availableSamples
+        if ready > 0 { samples.append(contentsOf: nes.apu.drain(count: ready)) }
+    }
+
+    writeWAV(samples, sampleRate: Int(sampleRate), to: outPath)
+
+    // Report signal statistics — the cheapest way to confirm this is music
+    // rather than silence or a DC offset.
+    let peak = samples.map(abs).max() ?? 0
+    let rms = (samples.reduce(0) { $0 + Double($1 * $1) } / Double(max(samples.count, 1))).squareRoot()
+    let crossings = zip(samples, samples.dropFirst()).filter { ($0 < 0) != ($1 < 0) }.count
+    print(String(format: """
+        Rendered %.1fs — %d samples at %.0f Hz
+          peak amplitude:  %.4f
+          RMS:             %.4f
+          zero crossings:  %d  (~%.0f Hz average)
+        """, seconds, samples.count, sampleRate, peak, rms, crossings,
+        Double(crossings) / 2.0 / seconds))
+    print("Wrote \(outPath)")
+
 case "paltrace":
     // Diagnostic: log every write that reaches palette memory, so a transfer
     // landing at the wrong address is immediately visible.
@@ -399,6 +481,46 @@ func writePNG(_ framebuffer: [UInt32], to path: String, scale: Int = 3) {
 
     CGImageDestinationAddImage(destination, scaled, nil)
     CGImageDestinationFinalize(destination)
+}
+
+/// Writes 16-bit mono PCM as a WAV. Hand-rolled so the CLI stays free of
+/// AVFoundation.
+func writeWAV(_ samples: [Float], sampleRate: Int, to path: String) {
+    var data = Data()
+
+    func append(_ string: String) { data.append(contentsOf: Array(string.utf8)) }
+    func append32(_ value: UInt32) {
+        data.append(contentsOf: [
+            UInt8(value & 0xFF), UInt8((value >> 8) & 0xFF),
+            UInt8((value >> 16) & 0xFF), UInt8((value >> 24) & 0xFF),
+        ])
+    }
+    func append16(_ value: UInt16) {
+        data.append(contentsOf: [UInt8(value & 0xFF), UInt8((value >> 8) & 0xFF)])
+    }
+
+    let byteCount = UInt32(samples.count * 2)
+
+    append("RIFF")
+    append32(36 + byteCount)
+    append("WAVE")
+    append("fmt ")
+    append32(16)                        // PCM header size
+    append16(1)                         // format: PCM
+    append16(1)                         // channels: mono
+    append32(UInt32(sampleRate))
+    append32(UInt32(sampleRate * 2))    // byte rate
+    append16(2)                         // block align
+    append16(16)                        // bits per sample
+    append("data")
+    append32(byteCount)
+
+    for sample in samples {
+        let clamped = max(-1.0, min(1.0, sample))
+        append16(UInt16(bitPattern: Int16(clamped * 32767)))
+    }
+
+    try? data.write(to: URL(fileURLWithPath: path))
 }
 
 /// Dumps the framebuffer as a binary PPM — trivially viewable and needs no
