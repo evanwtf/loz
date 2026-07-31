@@ -100,7 +100,7 @@ public final class SaveStateStore: ObservableObject {
             refresh()
             return true
         } catch {
-            print("save state: slot \(index) failed — \(error)")
+            Log.state.error("save slot \(index, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
             return false
         }
     }
@@ -117,7 +117,7 @@ public final class SaveStateStore: ObservableObject {
             try nes.restoreState(state, romHash: romHash)
             return true
         } catch {
-            print("load state: slot \(index) failed — \(error)")
+            Log.state.error("load slot \(index, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
             return false
         }
     }

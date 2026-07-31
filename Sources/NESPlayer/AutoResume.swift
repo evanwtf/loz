@@ -47,7 +47,7 @@ enum AutoResume {
                 try data.write(to: url, options: .atomic)
             } catch {
                 // Losing an automatic snapshot must never disturb play.
-                print("auto-resume: write failed — \(error)")
+                Log.state.error("auto-resume write failed: \(error.localizedDescription, privacy: .public)")
             }
         }
     }

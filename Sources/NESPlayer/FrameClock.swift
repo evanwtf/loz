@@ -61,8 +61,10 @@ final class FrameClock {
             link.add(to: .main, forMode: .common)
             displayLink = link
             startWatchdog()
+            Log.clock.notice("display link at 60 Hz (max available \(link.preferredFrameRateRange.maximum, privacy: .public) Hz)")
         } else {
             startTimer()
+            Log.clock.notice("no display link available — using timer fallback")
         }
     }
 
@@ -108,6 +110,7 @@ final class FrameClock {
             MainActor.assumeIsolated {
                 guard let self, self.displayLink != nil else { return }
                 if CFAbsoluteTimeGetCurrent() - self.lastTick > 0.75 {
+                    Log.clock.notice("display link stalled — switching to timer")
                     self.displayLink?.invalidate()
                     self.displayLink = nil
                     self.startTimer()

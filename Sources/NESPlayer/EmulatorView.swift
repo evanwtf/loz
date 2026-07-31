@@ -173,6 +173,10 @@ public struct EmulatorView: View {
             // the press never arriving and the game ignoring it; this splits
             // those apart without a debugger or a cable.
             Text("pad \(Self.padDescription(host.nes.controller1.buttons))")
+            // Which build this is. Saves guessing whether a fix is actually on
+            // the device, which is otherwise unanswerable from the device.
+            Text(BuildInfo.short)
+                .foregroundStyle(.green.opacity(0.7))
             if host.speedMultiplier > 1 {
                 Text("\(host.speedMultiplier)x").foregroundStyle(.yellow)
             }

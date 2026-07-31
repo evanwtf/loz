@@ -56,7 +56,7 @@ public enum LaunchOptions {
             else { return }
 
             scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { error in
-                print("orientation: request failed — \(error)")
+                Log.ui.error("orientation request failed: \(error.localizedDescription, privacy: .public)")
             }
         }
     #endif

@@ -159,3 +159,58 @@ cannot act on.
 Kept in its own file, separate from the four numbered save-state slots — an
 automatic write must never overwrite something the player chose to keep. There
 is a toggle in the in-game menu; turning it off deletes the snapshot.
+
+## Logging and diagnostics
+
+The app logs through `os.Logger` under the subsystem `wtf.evan.loz`, split into
+categories: `host`, `clock`, `audio`, `state`, `ui`. Unified logging is used
+rather than `print` because it is persisted by the OS — the run that reproduces
+a bug is usually not the run anyone was watching, and a device-only fault
+diagnosed by trying to catch the console at the right moment costs several
+attempts and often fails.
+
+Read it live from a connected device:
+
+```sh
+xcrun devicectl device process launch --device <id> --console <bundle-id>
+# or, without attaching to launch:
+log stream --device --predicate 'subsystem == "wtf.evan.loz"' --info
+```
+
+Collect what already happened, after the fact:
+
+```sh
+log collect --device --last 10m --output /tmp/device.logarchive
+log show /tmp/device.logarchive --predicate 'subsystem == "wtf.evan.loz"' --info
+```
+
+One gotcha worth knowing: the unified log **redacts string interpolation by
+default**, replacing values with `<private>` when read from another process.
+Every call site here marks its values `privacy: .public` deliberately — nothing
+logged is sensitive, and a redacted log is a useless one.
+
+### Diagnostics overlay
+
+Toggle it from the in-game **⋯** menu, or launch with `-nesDiagnostics YES`.
+It reports frames per second, the current PRG bank, PC, scanline, the **live
+pad state**, and the **build identity**.
+
+The last two exist because of specific dead ends. "The buttons do nothing" is
+ambiguous between a press never reaching the machine and the game ignoring one
+that did, and the pad line splits those apart without a debugger. The build
+line answers "is the phone actually running the fix I just installed", which is
+otherwise unanswerable from the device and is expensive to guess wrong in
+either direction.
+
+With diagnostics on, the frame loop also logs a budget breakdown every 120
+frames:
+
+```
+perf: 60.0 fps  emulate 1.20 ms  render 0.45 ms  budget 16.67 ms
+```
+
+If `emulate + render` approaches 16.67 ms the main thread is saturated, and the
+first symptom is not a visibly slow picture — display link callbacks are
+privileged over touch delivery, so the game keeps animating while taps go
+unread. That is what a 120 Hz display link caused before the clock was pinned
+to 60 Hz.

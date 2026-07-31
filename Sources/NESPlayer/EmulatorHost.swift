@@ -89,6 +89,13 @@ public final class EmulatorHost: ObservableObject {
         autoResumeURL = AutoResume.url(for: G.romResourceName)
         isMuted = LaunchOptions.startMuted
 
+        Log.host.notice("""
+        \(BuildInfo.summary, privacy: .public) — \(G.title, privacy: .public), \
+        mapper \(cartridge.mapperNumber, privacy: .public), \
+        \(romData.count, privacy: .public) bytes, \
+        battery \(cartridge.hasBattery, privacy: .public)
+        """)
+
         loadBatterySave()
         restoreAutoResume()
         renderCurrentFrame()
@@ -115,7 +122,7 @@ public final class EmulatorHost: ObservableObject {
             renderCurrentFrame()
             return true
         } catch {
-            print("auto-resume: ignoring snapshot — \(error)")
+            Log.state.notice("auto-resume: ignoring snapshot: \(error.localizedDescription, privacy: .public)")
             AutoResume.clear(at: autoResumeURL)
             return false
         }
@@ -142,6 +149,7 @@ public final class EmulatorHost: ObservableObject {
         clock.start()
         self.clock = clock
         if !isMuted { audio.start() }
+        Log.host.notice("started (muted \(isMuted, privacy: .public))")
     }
 
     public func stop() {
@@ -149,6 +157,7 @@ public final class EmulatorHost: ObservableObject {
         clock = nil
         audio.stop()
         persistForBackgrounding()
+        Log.host.notice("stopped")
     }
 
     // MARK: Frame loop
@@ -180,9 +189,12 @@ public final class EmulatorHost: ObservableObject {
             profileFrames += 1
             if profileFrames >= 120 {
                 let n = Double(profileFrames)
-                print(String(
-                    format: "perf: %.1f fps  emulate %.2f ms  render %.2f ms  budget 16.67 ms",
-                    framesPerSecond, profileEmulation / n * 1000, profileRender / n * 1000))
+                Log.clock.notice("""
+                perf: \(framesPerSecond, format: .fixed(precision: 1), privacy: .public) fps  \
+                emulate \(profileEmulation / n * 1000, format: .fixed(precision: 2), privacy: .public) ms  \
+                render \(profileRender / n * 1000, format: .fixed(precision: 2), privacy: .public) ms  \
+                budget 16.67 ms
+                """)
                 profileEmulation = 0
                 profileRender = 0
                 profileFrames = 0

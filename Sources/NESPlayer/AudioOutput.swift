@@ -125,7 +125,7 @@ final class AudioOutput {
             isRunning = true
         } catch {
             // Audio failing must never take the game down with it.
-            print("audio: engine failed to start — \(error)")
+            Log.audio.error("engine failed to start: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -155,7 +155,7 @@ final class AudioOutput {
                     .playback, mode: .default, options: [.mixWithOthers])
                 try AVAudioSession.sharedInstance().setActive(true)
             } catch {
-                print("audio: session configuration failed — \(error)")
+                Log.audio.error("session configuration failed: \(error.localizedDescription, privacy: .public)")
             }
         #endif
     }
