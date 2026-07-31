@@ -47,6 +47,7 @@ let package = Package(
         // macOS build that runs straight from SwiftPM — the fast dev loop.
         .executableTarget(name: "zeldamac", dependencies: ["NESPlayer", "ZeldaGame"]),
         .testTarget(name: "NESCoreTests", dependencies: ["NESCore"]),
+        .testTarget(name: "NESPlayerTests", dependencies: ["NESPlayer", "NESCore"]),
         .testTarget(
             name: "ZeldaGameTests",
             dependencies: ["ZeldaGame", "NESCore", "NESAnalysis"]),

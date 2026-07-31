@@ -291,6 +291,22 @@ case "play":
         print("Saved state to \(statePath)")
     }
 
+case "embed":
+    // Emits the cartridge image as Swift source so the app needs no .nes file.
+    let outPath = flag("--out", in: args) ?? "Sources/ZeldaGame/ZeldaROMData.swift"
+    let enumName = flag("--enum", in: args) ?? "ZeldaROMData"
+    let romBytes = [UInt8](try! Data(contentsOf: URL(fileURLWithPath: romPath)))
+
+    let source = EmbedROM.generate(
+        romData: romBytes, enumName: enumName, gameName: Zelda.title)
+    try! source.write(to: URL(fileURLWithPath: outPath), atomically: true, encoding: .utf8)
+
+    print("""
+    Embedded \(romBytes.count) bytes as \(enumName)
+      sha256: \(ROMHash.hex(of: romBytes))
+      wrote:  \(outPath)  (\(source.count / 1024) KB of source)
+    """)
+
 case "mapcheck":
     // Structural comparison of rendered overworld screens against the
     // reference map. Turns "does the overworld look right" into a number.

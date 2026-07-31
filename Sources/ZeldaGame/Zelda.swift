@@ -52,4 +52,14 @@ public enum Zelda: GameDefinition {
     /// Every entry is proven equivalent to its 6502 original by
     /// `RoutineEquivalenceTests` before it is added.
     public static let nativeRoutines = ZeldaRoutines.table()
+
+    /// The cartridge image, compiled into the binary — the app ships no .nes
+    /// file. Regenerate with:
+    ///
+    ///     swift run nesrun embed zelda.nes
+    ///
+    /// This is deliberately gitignored: the generated file holds the same bytes
+    /// as the ROM, so committing it would put game data in the repository that
+    /// was deliberately kept out.
+    public static var embeddedROM: [UInt8]? { ZeldaROMData.bytes }
 }

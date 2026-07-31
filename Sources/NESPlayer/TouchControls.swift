@@ -5,17 +5,29 @@ import SwiftUI
 
     /// On-screen controls, laid out for whichever orientation the device is in.
     ///
-    /// Portrait stacks the screen above the pad. Landscape puts the pad and buttons
-    /// either side of the screen, which both fills the space better and keeps
-    /// thumbs off the picture.
+    /// Portrait stacks the screen above the pad. Landscape puts the pad and
+    /// buttons either side of the screen, which both fills the space better and
+    /// keeps thumbs off the picture.
+    ///
+    /// All sizing comes from `ControlMetrics`, which is plain geometry with no
+    /// SwiftUI in it and is covered by tests.
     struct TouchControls: View {
         let host: EmulatorHost
         let layout: ControlLayout
 
         var body: some View {
             switch layout {
-            case let .portrait(size):
-                portrait(size)
+            case .portrait:
+                // Measure locally rather than trusting the size handed down.
+                //
+                // In portrait this view sits below the screen in a VStack, so
+                // its height is only what is left over. Sizing against the full
+                // window height pushed the whole cluster off the bottom of the
+                // display — invisible, and the game looked like it had no
+                // controls at all.
+                GeometryReader { geometry in
+                    portrait(geometry.size)
+                }
             case let .landscape(controlWidth, height):
                 landscape(controlWidth: controlWidth, height: height)
             }
@@ -24,45 +36,39 @@ import SwiftUI
         // MARK: Portrait
 
         private func portrait(_ size: CGSize) -> some View {
-            let margin: CGFloat = 20
-            let usable = size.width - margin * 2
-            let dpadSize = min(usable * 0.44, size.height * 0.62)
-            let gap = usable * 0.06
-            let column = usable - dpadSize - gap
-            let buttonSize = min(column * 0.42, dpadSize * 0.46)
+            let metrics = ControlMetrics.portrait(in: size)
 
-            return HStack(alignment: .center, spacing: gap) {
+            return HStack(alignment: .center, spacing: metrics.gap) {
                 DPadControl(host: host)
-                    .frame(width: dpadSize, height: dpadSize)
+                    .frame(width: metrics.dpadSize, height: metrics.dpadSize)
 
-                VStack(spacing: buttonSize * 0.34) {
-                    systemRow(buttonSize: buttonSize)
-                    actionRow(buttonSize: buttonSize)
+                VStack(spacing: metrics.buttonSize * 0.34) {
+                    systemRow(buttonSize: metrics.buttonSize)
+                    actionRow(buttonSize: metrics.buttonSize)
                 }
-                .frame(width: column)
+                .frame(width: metrics.columnWidth)
             }
-            .padding(.horizontal, margin)
+            .padding(.horizontal, metrics.margin)
             // Sit toward the bottom: that is where thumbs actually rest.
             .frame(width: size.width, height: size.height, alignment: .bottom)
-            .padding(.bottom, size.height * 0.10)
+            .padding(.bottom, metrics.bottomInset)
         }
 
         // MARK: Landscape
 
         private func landscape(controlWidth: CGFloat, height: CGFloat) -> some View {
-            let dpadSize = min(controlWidth * 0.92, height * 0.62)
-            let buttonSize = min(controlWidth * 0.40, height * 0.28)
+            let metrics = ControlMetrics.landscape(controlWidth: controlWidth, height: height)
 
             return HStack(spacing: 0) {
                 DPadControl(host: host)
-                    .frame(width: dpadSize, height: dpadSize)
+                    .frame(width: metrics.dpadSize, height: metrics.dpadSize)
                     .frame(width: controlWidth, height: height, alignment: .center)
 
                 Spacer(minLength: 0)
 
-                VStack(spacing: buttonSize * 0.30) {
-                    systemRow(buttonSize: buttonSize * 0.92)
-                    actionRow(buttonSize: buttonSize)
+                VStack(spacing: metrics.buttonSize * 0.30) {
+                    systemRow(buttonSize: metrics.buttonSize * 0.92)
+                    actionRow(buttonSize: metrics.buttonSize)
                 }
                 .frame(width: controlWidth, height: height, alignment: .center)
             }
@@ -88,26 +94,13 @@ import SwiftUI
         }
     }
 
-    /// How the controls should arrange themselves.
-    enum ControlLayout {
-        case portrait(CGSize)
-        /// Width available on each side of the screen, and the full height.
-        case landscape(controlWidth: CGFloat, height: CGFloat)
-    }
-
     // MARK: - D-pad
 
-    /// A single tracked surface rather than four separate buttons.
-    ///
-    /// Zelda needs reliable diagonals, and discrete hit targets drop inputs when a
-    /// thumb slides from one direction to another — which happens constantly when
-    /// dodging.
+    /// A single tracked surface rather than four buttons. Direction selection
+    /// lives in `DPadGeometry` so it can be tested without a touch.
     struct DPadControl: View {
         let host: EmulatorHost
         @State private var active: NESButton = []
-
-        /// Ignore a small centre area so a resting thumb picks no direction.
-        private let deadZone: CGFloat = 0.18
 
         var body: some View {
             GeometryReader { geometry in
@@ -125,23 +118,11 @@ import SwiftUI
                 .contentShape(Rectangle())
                 .gesture(
                     DragGesture(minimumDistance: 0)
-                        .onChanged { value in update(value.location, in: size) }
-                        .onEnded { _ in apply([]) }
-                )
+                        .onChanged { value in
+                            apply(DPadGeometry.direction(at: value.location, in: size))
+                        }
+                        .onEnded { _ in apply([]) })
             }
-        }
-
-        private func update(_ location: CGPoint, in size: CGFloat) {
-            // Normalise to -1...1 around the centre.
-            let dx = (location.x / size) * 2 - 1
-            let dy = (location.y / size) * 2 - 1
-
-            var next: NESButton = []
-            if abs(dx) > deadZone { next.insert(dx < 0 ? .left : .right) }
-            if abs(dy) > deadZone { next.insert(dy < 0 ? .up : .down) }
-
-            guard next != active else { return }
-            apply(next)
         }
 
         private func apply(_ next: NESButton) {
@@ -176,8 +157,7 @@ import SwiftUI
                 .overlay(
                     Text(title)
                         .font(.system(size: size * 0.34, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                )
+                        .foregroundStyle(.white))
                 .frame(width: size, height: size)
                 .scaleEffect(isPressed ? 0.92 : 1.0)
                 .animation(.easeOut(duration: 0.06), value: isPressed)
@@ -192,8 +172,7 @@ import SwiftUI
                         .onEnded { _ in
                             isPressed = false
                             host.setButton(button, pressed: false)
-                        }
-                )
+                        })
         }
     }
 
@@ -213,8 +192,7 @@ import SwiftUI
                                       weight: .semibold, design: .rounded))
                         .foregroundStyle(.white)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                )
+                        .minimumScaleFactor(0.6))
                 .frame(width: width, height: width * 0.34)
                 .gesture(
                     DragGesture(minimumDistance: 0)
@@ -226,8 +204,7 @@ import SwiftUI
                         .onEnded { _ in
                             isPressed = false
                             host.setButton(button, pressed: false)
-                        }
-                )
+                        })
         }
     }
 

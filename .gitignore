@@ -26,3 +26,9 @@ Captures/
 
 # Emulator snapshots embed CHR-RAM (game data); regenerate from docs/scripts/
 *.state
+
+# Generated ROM data: holds the same bytes as the cartridge, so it stays
+# out of the repository for the same reason the .nes does. Regenerate with
+# `swift run nesrun embed zelda.nes`.
+Sources/*/ROMData.swift
+Sources/*/ZeldaROMData.swift

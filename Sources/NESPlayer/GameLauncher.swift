@@ -49,6 +49,13 @@ public struct GameLauncher<G: GameDefinition>: View {
     }
 
     private func load() {
+        // Prefer a ROM compiled into the binary: no file to locate, no bundle
+        // resource, no way for this to fail at launch.
+        if let embedded = G.embeddedROM, !embedded.isEmpty {
+            start(with: embedded)
+            return
+        }
+
         let bundled = Bundle.main.url(
             forResource: G.romResourceName, withExtension: "nes")
 
@@ -63,10 +70,17 @@ public struct GameLauncher<G: GameDefinition>: View {
         }
 
         do {
-            let data = try Data(contentsOf: url)
+            try start(with: [UInt8](Data(contentsOf: url)))
+        } catch {
+            failure = String(describing: error)
+        }
+    }
+
+    private func start(with romData: [UInt8]) {
+        do {
             host = try EmulatorHost(
                 game: game,
-                romData: [UInt8](data),
+                romData: romData,
                 saveURL: EmulatorHost.defaultSaveURL(for: G.romResourceName))
         } catch {
             failure = String(describing: error)
