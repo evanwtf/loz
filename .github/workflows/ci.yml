@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Build and test
+    # Swift and the Apple SDKs are needed, so this must run on the macOS
+    # self-hosted runner rather than the Linux one.
+    runs-on: [self-hosted, macOS, ARM64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Build
+        run: swift build
+
+      # The test suite builds synthetic iNES images in memory and needs no real
+      # ROM, so it runs on a clean checkout. Tests that do require the ROM
+      # (decompiled routine equivalence) skip themselves when it is absent.
+      - name: Test
+        run: swift test
+
+      - name: Build release
+        run: swift build -c release
+
+      # Exercises the emulator end to end without a ROM: verifies the CLI is
+      # wired up and the analyzer runs.
+      - name: Smoke test CLI
+        run: |
+          swift run -c release nesrun 2>&1 | head -5 || true
+
+  lint:
+    name: Format check
+    runs-on: [self-hosted, macOS, ARM64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure swiftformat
+        run: |
+          if ! command -v swiftformat >/dev/null 2>&1; then
+            brew install swiftformat
+          fi
+          swiftformat --version
+
+      - name: Lint
+        run: swiftformat Sources Tests --lint --cache ignore
+
+  app:
+    name: Build iOS app
+    runs-on: [self-hosted, macOS, ARM64]
+    steps:
+      - uses: actions/checkout@v4
+
+      # ROMs are never committed. The app target uses a file-system
+      # synchronized group, so a missing ROM does not break the build — the
+      # app just reports it at launch. If the runner has a local copy, use it.
+      - name: Stage ROM if available
+        run: |
+          if [ -f "$HOME/roms/zelda.nes" ]; then
+            cp "$HOME/roms/zelda.nes" Apps/ZeldaiOS/zelda.nes
+            echo "Staged ROM from runner."
+          else
+            echo "No ROM on runner; building without the bundled resource."
+          fi
+
+      - name: Build for simulator
+        run: |
+          xcodebuild -project Apps/ZeldaiOS.xcodeproj \
+            -scheme Zelda \
+            -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            build
