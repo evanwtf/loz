@@ -298,7 +298,8 @@ case "embed":
     let romBytes = [UInt8](try! Data(contentsOf: URL(fileURLWithPath: romPath)))
 
     let source = EmbedROM.generate(
-        romData: romBytes, enumName: enumName, gameName: Zelda.title)
+        romData: romBytes, enumName: enumName, gameName: Zelda.title,
+        conformingType: flag("--extend", in: args) ?? "Zelda")
     try! source.write(to: URL(fileURLWithPath: outPath), atomically: true, encoding: .utf8)
 
     print("""

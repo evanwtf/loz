@@ -21,7 +21,8 @@ enum EmbedROM {
     static func generate(
         romData: [UInt8],
         enumName: String,
-        gameName: String
+        gameName: String,
+        conformingType: String? = nil
     ) -> String {
         let base64 = Data(romData).base64EncodedString()
         let chunks = stride(from: 0, to: base64.count, by: chunkSize).map { start -> String in
@@ -61,6 +62,21 @@ enum EmbedROM {
         }
         lines.append("    ]")
         lines.append("}")
+
+        // The conformance lives here rather than in the hand-written game file.
+        //
+        // This file is gitignored, so on a clean checkout it does not exist. If
+        // the game type referred to it directly, the package would not compile
+        // at all without a ROM — which broke CI exactly once. Generating the
+        // extension instead means its absence simply leaves `embeddedROM` at
+        // its protocol default of nil, and the app falls back to a ROM file.
+        if let conformingType {
+            lines.append("")
+            lines.append("public extension \(conformingType) {")
+            lines.append("    static var embeddedROM: [UInt8]? { \(enumName).bytes }")
+            lines.append("}")
+        }
+
         lines.append("")
         return lines.joined(separator: "\n")
     }
