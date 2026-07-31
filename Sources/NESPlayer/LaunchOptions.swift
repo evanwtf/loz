@@ -31,6 +31,12 @@ public enum LaunchOptions {
         UserDefaults.standard.bool(forKey: "nesMuted")
     }
 
+    /// Opens the in-game menu at launch, so its layout can be captured without
+    /// a synthetic tap.
+    public static var openMenu: Bool {
+        UserDefaults.standard.bool(forKey: "nesMenu")
+    }
+
     #if os(iOS)
     /// Asks the window scene to adopt the requested orientation, if any.
     @MainActor

@@ -36,10 +36,14 @@ public struct GameScreen: View {
 /// diagnostics overlay.
 public struct EmulatorView: View {
     @ObservedObject private var host: EmulatorHost
+    @StateObject private var store: SaveStateStore
     @State private var showDiagnostics = LaunchOptions.showDiagnostics
+    @State private var showMenu = LaunchOptions.openMenu
 
     public init(host: EmulatorHost) {
         self.host = host
+        _store = StateObject(wrappedValue: SaveStateStore(
+            gameName: host.gameName, romHash: host.romHash))
     }
 
     public var body: some View {
@@ -51,8 +55,35 @@ public struct EmulatorView: View {
             .overlay(alignment: .topLeading) {
                 if showDiagnostics { diagnostics }
             }
+            .overlay(alignment: .topTrailing) {
+                if !showMenu { menuButton }
+            }
+            .overlay {
+                if showMenu {
+                    GameMenu(host: host, store: store,
+                             isPresented: $showMenu,
+                             showDiagnostics: $showDiagnostics)
+                }
+            }
             .modifier(KeyboardControls(host: host, showDiagnostics: $showDiagnostics))
             .modifier(GameControllerSupport(host: host))
+    }
+
+    /// The only permanent chrome. Small and translucent so it reads as part of
+    /// the bezel rather than an emulator toolbar.
+    private var menuButton: some View {
+        Button {
+            store.refresh()
+            host.isPaused = true
+            withAnimation(.easeOut(duration: 0.15)) { showMenu = true }
+        } label: {
+            Image(systemName: "ellipsis.circle.fill")
+                .font(.system(size: 22))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.white.opacity(0.45))
+                .padding(10)
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder

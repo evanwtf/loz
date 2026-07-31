@@ -19,6 +19,11 @@ public final class EmulatorHost: ObservableObject {
 
     public let nes: NES
     public let title: String
+    /// Identifies the exact dump in use, so save states cannot be loaded into
+    /// a different ROM.
+    public let romHash: String
+    /// Bundle resource name, used to namespace saves per game.
+    public let gameName: String
 
     @Published public private(set) var frame: CGImage?
     @Published public private(set) var framesPerSecond: Double = 0
@@ -60,7 +65,10 @@ public final class EmulatorHost: ObservableObject {
         self.nes = try NES(cartridge: cartridge, sampleRate: sampleRate)
         self.nes.nativeRoutines = G.nativeRoutines
         self.title = G.title
+        self.romHash = G.expectedROMHash
+        self.gameName = G.romResourceName
         self.saveURL = cartridge.hasBattery ? saveURL : nil
+        self.isMuted = LaunchOptions.startMuted
 
         loadBatterySave()
         renderCurrentFrame()
@@ -146,6 +154,13 @@ public final class EmulatorHost: ObservableObject {
 
     public func reset() {
         nes.reset()
+        refreshFrameAfterStateChange()
+    }
+
+    /// Re-renders immediately after the machine state is replaced, so the
+    /// picture updates even while paused.
+    public func refreshFrameAfterStateChange() {
+        renderCurrentFrame()
     }
 
     // MARK: Battery save

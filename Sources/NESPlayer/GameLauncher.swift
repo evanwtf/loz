@@ -40,6 +40,9 @@ public struct GameLauncher<G: GameDefinition>: View {
                     }
             }
         }
+        // The game is a dark, full-bleed surface; a light-mode menu material
+        // over it reads as a system alert intruding rather than part of the app.
+        .preferredColorScheme(.dark)
         #if os(iOS)
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
