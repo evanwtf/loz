@@ -23,6 +23,7 @@
 |---|---|
 | [testing.md](testing.md) | Test philosophy, what each suite guards, how to add more |
 | [adding-a-game.md](adding-a-game.md) | Shipping a second title without forking anything |
+| [rom-free.md](rom-free.md) | Removing the `.nes` dependency; what is left to extract |
 | [ios-app.md](ios-app.md) | Building, running, and sideloading the app |
 
 ## Reference material

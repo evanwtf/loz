@@ -6,7 +6,12 @@ An NES emulator written from scratch in Swift, being incrementally decompiled
 into a native Swift port of *The Legend of Zelda* for iPhone, Apple TV, and
 macOS. Not for the App Store. One SwiftPM package plus thin iOS/tvOS Xcode
 shells. **One app = one game**: no ROM picker, no library UI; each title is a
-small game library plus a thin app target that embeds its own ROM.
+small game library plus a thin app target carrying its own game data.
+
+That data is *not* in the repository. `embeddedROM` defaults to nil, and the
+generated `ZeldaROMData.swift` that fills it in is gitignored — so a clean
+checkout builds and runs, and falls back to loading a `.nes` from disk. See
+`docs/rom-free.md`.
 
 The emulator is scaffolding for the decompilation. It is the **oracle** (native
 routines are differentially tested against the interpreted 6502, including
@@ -46,7 +51,11 @@ playable at every step.
   by the routine-equivalence tests. `swift build`/`swift test` do **not** need
   it — tests synthesise iNES images in memory and ROM-dependent tests skip
   cleanly when it is absent.
-- The tvOS app is written but unverified (no tvOS SDK installed).
+- The tvOS app is written but has never been compiled: the tvOS **platform
+  component** is not installed. Do not check this with `xcodebuild -showsdks` —
+  it lists tvOS anyway. The real answer comes from attempting a build, which
+  fails with "tvOS N is not installed. Please download and install the platform
+  from Xcode > Settings > Components."
 
 ## Commands
 
@@ -67,8 +76,15 @@ xcodebuild -project Apps/ZeldaiOS.xcodeproj -scheme Zelda \
 ```
 
 `nesrun` subcommands: `info hash analyze disasm run play embed probe mapcheck
-navigate audio paltrace`. Options and input-script syntax
-(`wait:60,start:4,up+a:12`): `docs/agent-harness.md`.
+navigate audio paltrace`. Run `nesrun` with no arguments for the full flag
+list; input-script syntax (`wait:60,start:4,up+a:12`) and worked examples are
+in `docs/agent-harness.md`.
+
+**Use `probe`, not a shell loop.** Working out an unknown route by invoking
+`play` once per guess is dominated by process start and ROM load, and costs a
+round trip per answer. `probe --load-state S --inputs "right:{0..24/4},up:200"
+--goal 00EB=63` restores the same snapshot for every candidate in one process
+and prints one table. Seconds instead of minutes.
 
 ## Project Layout
 
@@ -83,7 +99,9 @@ Sources/
   zeldamac/    macOS app, runs straight from SwiftPM
 Apps/          ZeldaiOS / ZeldatvOS Xcode projects — thin shells, scheme "Zelda"
 Tests/         NESCoreTests, NESPlayerTests, ZeldaGameTests
-docs/          architecture, decompilation strategy, harness guide, testing, iOS app
+docs/          architecture, decompilation, agent-harness, testing, ios-app,
+               adding-a-game, rom-format, rom-free, emulator-{cpu,ppu,mappers};
+               README.md is the index
 Reference/     first-quest overworld map PNG, used by `nesrun mapcheck`
 ```
 
@@ -121,6 +139,14 @@ Reference/     first-quest overworld map PNG, used by `nesrun mapcheck`
   differential verification (`ZeldaGameTests` / `RoutineVerifier`, including
   ordered register writes) and is registered in the `RoutineTable` with a
   bank-scoped key and an honest cycle count.
+- **Verify UI changes in both orientations, with a screenshot.** The on-screen
+  controls once shipped off-screen in portrait: the layout tests passed and
+  landscape was reviewed by eye, so nothing caught it until a portrait
+  screenshot did. `ControlLayoutTests` now covers both, but a passing suite is
+  not a substitute for looking at the thing.
+- **A verified routine is a claim about the emulator too.** If the interpreter
+  is wrong, differential testing bakes the bug into "verified" native code and
+  makes it far harder to find. Prefer fixing the oracle over matching it.
 
 ## Guardrails
 
@@ -130,9 +156,10 @@ Reference/     first-quest overworld map PNG, used by `nesrun mapcheck`
   --cache ignore` before considering work done — both are CI gates, and the
   suite needs no ROM.
 - Keep all cartridge data out of git: `.nes`, `.sav`, `.srm`, `.state`, and
-  `Sources/*/ZeldaROMData.swift` are gitignored because they *are* the
-  copyrighted game. Snapshots embed CHR-RAM; regenerate them with the committed
-  script `docs/scripts/boot-to-overworld.txt` instead of committing them.
+  `Sources/*/ROMData.swift` + `Sources/*/ZeldaROMData.swift` are gitignored
+  because they *are* the copyrighted game. Snapshots embed CHR-RAM; regenerate
+  them with the committed script `docs/scripts/boot-to-overworld.txt` instead
+  of committing them.
 
 ### Never
 
@@ -144,12 +171,26 @@ Reference/     first-quest overworld map PNG, used by `nesrun mapcheck`
   dependencies while the core is in flux" (comment in `main.swift`).
 - Never remove the `-O`/`unsafeFlags` on `NESCore` in `Package.swift`: at
   `-Onone` the interpreter runs ~15 fps and looks broken; at `-O` it holds 60.
+- Never let a hand-written source file reference `ZeldaROMData`. That file is
+  generated and gitignored, so a direct reference makes a clean checkout fail
+  to compile — which broke CI exactly once. `nesrun embed` generates the
+  `embeddedROM` conformance *inside* the generated file (`EmbedROM.swift`) so
+  its absence simply leaves the protocol default of nil.
 
 ### Use Extra Caution
 
 - `Sources/NESCore/Opcodes.swift` — one shifted row in the grid silently
   corrupts interpreter and disassembler alike; that is what the alignment-
   preserving format rules protect.
+- `Sources/NESAnalysis/RoutineVerifier.swift` — two preconditions make the
+  difference between a real comparison and nonsense, both commented at the
+  code. `forceBank` must run because a restored snapshot has whatever bank was
+  live when it was captured, not the routine's; without it the verifier
+  executes unrelated bytes at the right address. And the run loop steps
+  `nes.cpu.step()`, not `nes.step()` — clocking the PPU lets an NMI fire
+  mid-routine and run the game's whole frame handler, which once produced
+  13,792 writes against an expected 3. If verification reports absurd write
+  counts or `completed: false`, suspect these before suspecting the routine.
 - `Sources/ZeldaGame/ZeldaROMData.swift` — generated by `nesrun embed`; do not
   edit by hand (and it is gitignored anyway).
 - `Apps/*.xcodeproj` — the iOS target uses a file-system synchronized group, so
