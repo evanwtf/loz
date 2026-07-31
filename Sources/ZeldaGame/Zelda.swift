@@ -44,7 +44,10 @@ public enum Zelda: GameDefinition {
         0x6600: "saveSlot2",
     ])
 
-    /// Routines converted to native Swift. Empty until the first verified
-    /// conversion lands; the game runs fully interpreted in the meantime.
-    public static let nativeRoutines = RoutineTable()
+    /// Routines converted to native Swift. Anything not listed here keeps
+    /// running interpreted, so the game stays playable throughout.
+    ///
+    /// Every entry is proven equivalent to its 6502 original by
+    /// `RoutineEquivalenceTests` before it is added.
+    public static let nativeRoutines = ZeldaRoutines.table()
 }

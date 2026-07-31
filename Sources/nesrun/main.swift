@@ -211,6 +211,12 @@ case "play":
     let nes = try! NES(cartridge: cartridge)
     let scale = Int(flag("--scale", in: args) ?? "3") ?? 3
 
+    // Install decompiled Swift routines in place of their 6502 originals.
+    if args.contains("--native") {
+        nes.nativeRoutines = Zelda.nativeRoutines
+        print("Native routines active: \(nes.nativeRoutines.count)")
+    }
+
     if let statePath = flag("--load-state", in: args) {
         let data = try! Data(contentsOf: URL(fileURLWithPath: statePath))
         let state = try! JSONDecoder().decode(SaveState.self, from: data)
@@ -231,6 +237,14 @@ case "play":
 
     print(String(format: "Stopped at frame %d  PC $%04X  bank %d",
                  nes.ppu.frame, nes.cpu.pc, nes.mapper.currentPRGBank))
+
+    if !nes.nativeCallCounts.isEmpty {
+        print("Native routine calls:")
+        for (key, count) in nes.nativeCallCounts.sorted(by: { $0.value > $1.value }) {
+            let name = nes.nativeRoutines[key]?.name ?? "?"
+            print("  \(key) \(name): \(count)")
+        }
+    }
 
     if let watch = flag("--watch", in: args) {
         let values = watch.split(separator: ",").map { token -> String in

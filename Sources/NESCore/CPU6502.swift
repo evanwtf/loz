@@ -61,6 +61,19 @@ public final class CPU6502 {
         setFlag(Flag.negative, value & 0x80 != 0)
     }
 
+    /// Sets Z and N from a value, exactly as a load or arithmetic result does.
+    ///
+    /// Decompiled routines need this: the flags a routine leaves behind are
+    /// part of its contract, and callers branch on them.
+    public func setZeroNegative(_ value: UInt8) {
+        setZN(value)
+    }
+
+    /// Sets the carry flag, for decompiled shift and compare operations.
+    public func setCarry(_ carry: Bool) {
+        setFlag(Flag.carry, carry)
+    }
+
     // MARK: Bus helpers
 
     @inline(__always) private func read(_ addr: UInt16) -> UInt8 { bus.cpuRead(addr) }
