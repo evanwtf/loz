@@ -626,8 +626,8 @@ case "clearroom":
 
     let verdict = outcome.died ? "DIED" : (outcome.cleared ? "CLEARED" : "TIMED OUT")
     print(String(
-        format: "%@ in %d frames, %d swings, %d pickups, %d enemies left  screen $%02X  health $%02X",
-        verdict, outcome.frames, outcome.swings, outcome.pickups, outcome.remaining,
+        format: "%@ in %d frames, %d swings, %d pickups, %d hits taken, %d enemies left  screen $%02X  health $%02X",
+        verdict, outcome.frames, outcome.swings, outcome.pickups, outcome.hitsTaken, outcome.remaining,
         nes.cpuRead(Navigator.screenAddress), nes.cpuRead(0x066F)))
 
     if let outPath = flag("--out", in: args) {
