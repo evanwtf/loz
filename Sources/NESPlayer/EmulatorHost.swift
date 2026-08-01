@@ -79,6 +79,12 @@ public final class EmulatorHost: ObservableObject {
     public func noteGestureHandled() {
         guard lastTouchBeganUptime > 0 else { return }
         let ms = (ProcessInfo.processInfo.systemUptime - lastTouchBeganUptime) * 1000
+        // Consume the timestamp. `onChanged` fires continuously while a finger
+        // is down, so without this every callback re-measures against the
+        // original touch and the figure becomes the hold duration: a two-second
+        // press on the d-pad reported 1631 ms of "recognition latency". One
+        // sample per touch-down, and only the first, is the actual quantity.
+        lastTouchBeganUptime = 0
         guard ms >= 0, ms < 5000 else { return }
         let previous = diagnostics.gestureLatency
         diagnostics.gestureLatency = InputLatency(

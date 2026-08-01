@@ -176,14 +176,16 @@ import SwiftUI
                     .foregroundStyle(.white.opacity(0.5))
             }
             .frame(width: size, height: size)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        host.noteGestureHandled()
-                        apply(DPadGeometry.direction(at: value.location, in: size))
+            .overlay {
+                RawTouchSurface { point in
+                    guard let point else {
+                        apply([])
+                        return
                     }
-                    .onEnded { _ in apply([]) })
+                    host.noteGestureHandled()
+                    apply(DPadGeometry.direction(at: point, in: size))
+                }
+            }
         }
 
         private func apply(_ next: NESButton) {
@@ -223,21 +225,23 @@ import SwiftUI
                 .frame(width: size, height: size)
                 .scaleEffect(isPressed ? 0.92 : 1.0)
                 .animation(.easeOut(duration: 0.06), value: isPressed)
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
-                            host.noteGestureHandled()
-                            guard !isPressed else { return }
-                            isPressed = true
-                            host.setButton(button, pressed: true)
-                            held.value.insert(button)
-                            Haptics.action()
-                        }
-                        .onEnded { _ in
+                .overlay {
+                    RawTouchSurface { point in
+                        guard point != nil else {
+                            guard isPressed else { return }
                             isPressed = false
                             host.setButton(button, pressed: false)
                             held.value.remove(button)
-                        })
+                            return
+                        }
+                        guard !isPressed else { return }
+                        host.noteGestureHandled()
+                        isPressed = true
+                        host.setButton(button, pressed: true)
+                        held.value.insert(button)
+                        Haptics.action()
+                    }
+                }
         }
     }
 
@@ -260,21 +264,23 @@ import SwiftUI
                         .lineLimit(1)
                         .minimumScaleFactor(0.6))
                 .frame(width: width, height: width * 0.34)
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
-                            host.noteGestureHandled()
-                            guard !isPressed else { return }
-                            isPressed = true
-                            host.setButton(button, pressed: true)
-                            held.value.insert(button)
-                            Haptics.system()
-                        }
-                        .onEnded { _ in
+                .overlay {
+                    RawTouchSurface { point in
+                        guard point != nil else {
+                            guard isPressed else { return }
                             isPressed = false
                             host.setButton(button, pressed: false)
                             held.value.remove(button)
-                        })
+                            return
+                        }
+                        guard !isPressed else { return }
+                        host.noteGestureHandled()
+                        isPressed = true
+                        host.setButton(button, pressed: true)
+                        held.value.insert(button)
+                        Haptics.system()
+                    }
+                }
         }
     }
 
