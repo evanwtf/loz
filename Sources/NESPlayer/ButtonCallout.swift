@@ -48,9 +48,27 @@ import SwiftUI
         }
     }
 
+    /// Which buttons are held right now.
+    ///
+    /// A reference type on purpose. The controls need to *write* press state so
+    /// the callouts can show it, but they must not be rebuilt when it changes:
+    /// a press that invalidates `TouchControls` recreates every `DragGesture`
+    /// underneath it, which is the same fault that made the whole view tree
+    /// rebuild at frame rate — just triggered by touching instead of by
+    /// drawing. Holding this as a plain `@State` reference and observing it
+    /// only where it is displayed keeps the writes off the controls.
+    @MainActor
+    final class HeldButtons: ObservableObject {
+        @Published var value: NESButton = []
+
+        init(_ value: NESButton = []) {
+            self.value = value
+        }
+    }
+
     /// The callouts for one cluster, laid out in a row above it.
     struct CalloutRow: View {
-        let held: NESButton
+        @ObservedObject var held: HeldButtons
         /// Which buttons this row is responsible for, and what to call them.
         let names: [(button: NESButton, title: String)]
 
@@ -64,13 +82,13 @@ import SwiftUI
         var body: some View {
             HStack(alignment: .bottom, spacing: 6) {
                 ForEach(0..<names.count, id: \.self) { index in
-                    if held.contains(names[index].button) {
+                    if held.value.contains(names[index].button) {
                         ButtonCallout(title: names[index].title)
                     }
                 }
             }
             .frame(height: Self.height, alignment: .bottom)
-            .animation(.easeOut(duration: 0.08), value: held.rawValue)
+            .animation(.easeOut(duration: 0.08), value: held.value.rawValue)
             .allowsHitTesting(false)
         }
 

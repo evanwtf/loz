@@ -20,7 +20,7 @@ import SwiftUI
         /// is set on exactly the transitions that call `host.setButton`, so a
         /// callout means "the emulator has been told" — which makes it a
         /// readout of input latency as well as of state.
-        @State private var held: NESButton = LaunchOptions.forcedHeldButtons
+        @State private var held = HeldButtons(LaunchOptions.forcedHeldButtons)
 
         var body: some View {
             switch layout {
@@ -57,7 +57,7 @@ import SwiftUI
                 }
 
                 HStack(alignment: .center, spacing: metrics.gap) {
-                    DPadControl(host: host, size: metrics.dpadSize, held: $held)
+                    DPadControl(host: host, size: metrics.dpadSize, held: held)
 
                     VStack(spacing: metrics.buttonSize * 0.34) {
                         systemRow(buttonSize: metrics.buttonSize)
@@ -88,7 +88,7 @@ import SwiftUI
                 column(width: controlWidth, height: height,
                        callouts: CalloutRow.directions)
                 {
-                    DPadControl(host: host, size: metrics.dpadSize, held: $held)
+                    DPadControl(host: host, size: metrics.dpadSize, held: held)
                 }
 
                 Spacer(minLength: 0)
@@ -124,18 +124,18 @@ import SwiftUI
         private func systemRow(buttonSize: CGFloat) -> some View {
             HStack(spacing: buttonSize * 0.26) {
                 SystemButton(title: "SELECT", button: .select, host: host,
-                             width: buttonSize * 1.02, held: $held)
+                             width: buttonSize * 1.02, held: held)
                 SystemButton(title: "START", button: .start, host: host,
-                             width: buttonSize * 1.02, held: $held)
+                             width: buttonSize * 1.02, held: held)
             }
         }
 
         private func actionRow(buttonSize: CGFloat) -> some View {
             HStack(spacing: buttonSize * 0.34) {
                 ActionButton(title: "B", button: .b, host: host,
-                             size: buttonSize, held: $held)
+                             size: buttonSize, held: held)
                 ActionButton(title: "A", button: .a, host: host,
-                             size: buttonSize, held: $held)
+                             size: buttonSize, held: held)
                     .offset(y: -buttonSize * 0.26)
             }
         }
@@ -158,12 +158,12 @@ import SwiftUI
         /// `ControlMetrics` already knows this number, so the measurement was
         /// never necessary.
         let size: CGFloat
-        @Binding var held: NESButton
+        let held: HeldButtons
 
         private static let directions: [NESButton] = [.up, .down, .left, .right]
 
         private var active: NESButton {
-            held.intersection(NESButton(Self.directions))
+            held.value.intersection(NESButton(Self.directions))
         }
 
         var body: some View {
@@ -195,8 +195,8 @@ import SwiftUI
                     host.setButton(direction, pressed: isHeld)
                 }
             }
-            held.subtract(NESButton(Self.directions))
-            held.formUnion(next)
+            held.value.subtract(NESButton(Self.directions))
+            held.value.formUnion(next)
             if !next.isEmpty { Haptics.direction() }
         }
     }
@@ -208,7 +208,7 @@ import SwiftUI
         let button: NESButton
         let host: EmulatorHost
         var size: CGFloat = 74
-        @Binding var held: NESButton
+        let held: HeldButtons
         @State private var isPressed = false
 
         var body: some View {
@@ -228,13 +228,13 @@ import SwiftUI
                             guard !isPressed else { return }
                             isPressed = true
                             host.setButton(button, pressed: true)
-                            held.insert(button)
+                            held.value.insert(button)
                             Haptics.action()
                         }
                         .onEnded { _ in
                             isPressed = false
                             host.setButton(button, pressed: false)
-                            held.remove(button)
+                            held.value.remove(button)
                         })
         }
     }
@@ -244,7 +244,7 @@ import SwiftUI
         let button: NESButton
         let host: EmulatorHost
         var width: CGFloat = 74
-        @Binding var held: NESButton
+        let held: HeldButtons
         @State private var isPressed = false
 
         var body: some View {
@@ -264,13 +264,13 @@ import SwiftUI
                             guard !isPressed else { return }
                             isPressed = true
                             host.setButton(button, pressed: true)
-                            held.insert(button)
+                            held.value.insert(button)
                             Haptics.system()
                         }
                         .onEnded { _ in
                             isPressed = false
                             host.setButton(button, pressed: false)
-                            held.remove(button)
+                            held.value.remove(button)
                         })
         }
     }

@@ -217,6 +217,10 @@ public struct EmulatorView: View {
     }
 
     #if os(iOS)
+        /// Somewhere for the SELECT/START buttons to report press state when
+        /// nothing is drawing callouts. Apple's pad has no callouts to feed.
+        private static let sinkHeld = HeldButtons()
+
         /// Layout for Apple's virtual controller.
         ///
         /// The pad lives in a system window over this one, so the app draws
@@ -236,9 +240,9 @@ public struct EmulatorView: View {
         private var selectStartRow: some View {
             HStack(spacing: 10) {
                 SystemButton(title: "SELECT", button: .select, host: host,
-                             width: 86, held: .constant([]))
+                             width: 86, held: Self.sinkHeld)
                 SystemButton(title: "START", button: .start, host: host,
-                             width: 86, held: .constant([]))
+                             width: 86, held: Self.sinkHeld)
             }
             .padding(.top, 6)
         }
