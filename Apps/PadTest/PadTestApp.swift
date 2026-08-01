@@ -36,13 +36,47 @@ final class PadState: ObservableObject {
     private var mover: Timer?
     private var velocity = CGVector.zero
 
+    /// Which left-hand element to ask for.
+    ///
+    /// Switchable at runtime because the answer to "does a d-pad draw?" turned
+    /// out to be no, and the next question is immediately "does a thumbstick?".
+    /// Asking for both at once terminates the app, so they have to be compared
+    /// one at a time — and a rebuild-and-reinstall per comparison is a poor way
+    /// to spend anyone's evening.
+    enum LeftElement: String, CaseIterable {
+        case dpad = "d-pad"
+        case thumbstick = "stick"
+        case none = "buttons only"
+
+        var input: String? {
+            switch self {
+            case .dpad: GCInputDirectionPad
+            case .thumbstick: GCInputLeftThumbstick
+            case .none: nil
+            }
+        }
+    }
+
+    @Published var left = LeftElement.dpad
+
     func start() {
+        connect(left)
+    }
+
+    func choose(_ element: LeftElement) {
+        left = element
+        velocity = .zero
+        reading = "—"
+        status = "reconnecting…"
+        virtual?.disconnect()
+        virtual = nil
+        connect(element)
+    }
+
+    private func connect(_ element: LeftElement) {
         let configuration = GCVirtualController.Configuration()
-        configuration.elements = [
-            GCInputDirectionPad,
-            GCInputButtonA,
-            GCInputButtonB,
-        ]
+        configuration.elements = Set(
+            [element.input, GCInputButtonA, GCInputButtonB].compactMap { $0 })
 
         let pad = GCVirtualController(configuration: configuration)
         virtual = pad
@@ -86,13 +120,17 @@ final class PadState: ObservableObject {
         status = names.isEmpty ? "no elements" : names.sorted().joined(separator: ", ")
 
         controller.handlerQueue = .main
-        pad.dpad.valueChangedHandler = { [weak self] _, x, y in
+        // Bind both: whichever the system chose to draw is the one that will
+        // ever report a value, and this way the dot moves either way.
+        let steer: (GCControllerDirectionPad, Float, Float) -> Void = { [weak self] _, x, y in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 self.velocity = CGVector(dx: CGFloat(x) * 4, dy: CGFloat(-y) * 4)
                 self.reading = String(format: "x %.2f  y %.2f", x, y)
             }
         }
+        pad.dpad.valueChangedHandler = steer
+        pad.leftThumbstick.valueChangedHandler = steer
         pad.buttonA.pressedChangedHandler = { [weak self] _, _, pressed in
             MainActor.assumeIsolated { self?.note("A", pressed) }
         }
@@ -127,6 +165,21 @@ struct PadTestView: View {
                 Text("button \(pad.buttons.isEmpty ? "—" : pad.buttons)")
                 Text("A recentres the dot")
                     .foregroundStyle(.white.opacity(0.4))
+
+                HStack(spacing: 8) {
+                    ForEach(PadState.LeftElement.allCases, id: \.self) { element in
+                        Button(element.rawValue) { pad.choose(element) }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                pad.left == element
+                                    ? Color.green.opacity(0.35)
+                                    : Color.white.opacity(0.12),
+                                in: Capsule())
+                            .foregroundStyle(.white)
+                    }
+                }
+                .padding(.top, 8)
             }
             .font(.system(size: 12, design: .monospaced))
             .foregroundStyle(.green)
