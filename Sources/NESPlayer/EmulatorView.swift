@@ -121,7 +121,7 @@ public struct EmulatorView: View {
             GameScreen(image: host.frame)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(alignment: .topLeading) {
-                    if showDiagnostics { diagnostics }
+                    if showDiagnostics { diagnostics() }
                 }
         #endif
     }
@@ -140,7 +140,7 @@ public struct EmulatorView: View {
                     // screen. That is where the diagnostics belong: legible,
                     // and not covering the game.
                     .overlay(alignment: .topLeading) {
-                        if showDiagnostics { diagnostics }
+                        if showDiagnostics { diagnostics() }
                     }
             }
         }
@@ -162,12 +162,14 @@ public struct EmulatorView: View {
                     layout: .landscape(controlWidth: controlWidth, height: size.height))
             }
             .frame(width: size.width, height: size.height)
-            // The d-pad is centred in its column, so the space above it is
-            // free. Constraining the overlay to the column keeps it off the
-            // picture entirely rather than only mostly off it.
-            .overlay(alignment: .topLeading) {
+            // A landscape side column is only ~164 pt wide and the callouts
+            // claim the space directly above the cluster, so the readout goes
+            // below it, in compact form. The full-width version wraps here and
+            // collides with the pins.
+            .overlay(alignment: .bottomLeading) {
                 if showDiagnostics {
-                    diagnostics.frame(width: controlWidth, alignment: .leading)
+                    diagnostics(compact: true)
+                        .frame(width: controlWidth, alignment: .leading)
                 }
             }
         }
@@ -183,7 +185,10 @@ public struct EmulatorView: View {
         return held.isEmpty ? "—" : held.joined(separator: " ")
     }
 
-    private var diagnostics: some View {
+    /// - Parameter compact: drop the emulator internals and shrink the type,
+    ///   for places too narrow for the full readout. The frame and input
+    ///   timings survive in both forms — they are the reason this exists.
+    private func diagnostics(compact: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(String(format: "%.0f fps", host.framesPerSecond))
             // The frame budget, on screen. `gap` is the one that matters for
@@ -198,9 +203,16 @@ public struct EmulatorView: View {
                         host.profile.gapMS, host.profile.worstGapMS))
             Text("late \(host.profile.lateTicks)/120")
                 .foregroundStyle(host.profile.lateTicks > 6 ? .red : .green)
-            Text("bank \(host.nes.mapper.currentPRGBank)")
-            Text(String(format: "PC $%04X", host.nes.cpu.pc))
-            Text("scanline \(host.nes.ppu.scanline)")
+            // Finger-to-code latency, measured from the event's own timestamp.
+            // This is the number the whole input investigation turns on.
+            Text(String(format: "touch %.0f  max %.0f ms",
+                        host.inputLatency.lastMS, host.inputLatency.worstMS))
+                .foregroundStyle(host.inputLatency.worstMS > 100 ? .red : .green)
+            if !compact {
+                Text("bank \(host.nes.mapper.currentPRGBank)")
+                Text(String(format: "PC $%04X", host.nes.cpu.pc))
+                Text("scanline \(host.nes.ppu.scanline)")
+            }
             // Live pad state. "The buttons do nothing" is ambiguous between
             // the press never arriving and the game ignoring it; this splits
             // those apart without a debugger or a cable.
@@ -217,7 +229,8 @@ public struct EmulatorView: View {
                 Text("\(host.speedMultiplier)x").foregroundStyle(.yellow)
             }
         }
-        .font(.system(size: 11, weight: .medium, design: .monospaced))
+        .font(.system(size: compact ? 9 : 11, weight: .medium, design: .monospaced))
+        .fixedSize(horizontal: false, vertical: true)
         .foregroundStyle(.green)
         .padding(8)
         .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))

@@ -1,4 +1,5 @@
 import Foundation
+import NESCore
 
 #if os(iOS)
     import UIKit
@@ -20,14 +21,43 @@ public enum LaunchOptions {
         UserDefaults.standard.string(forKey: "nesOrientation")?.lowercased()
     }
 
-    /// Starts with the diagnostics overlay visible.
+    /// Starts with the diagnostics overlay visible. On by default.
+    ///
+    /// This is a development build of an emulator, not a shipping game, and
+    /// the overlay is the only way to answer "did that press register, and how
+    /// late?" while holding the device. Defaulting it off meant every
+    /// investigation began by asking someone to go and turn it on. Pass
+    /// `-nesDiagnostics 0` for a clean screenshot.
     public static var showDiagnostics: Bool {
-        UserDefaults.standard.bool(forKey: "nesDiagnostics")
+        (UserDefaults.standard.object(forKey: "nesDiagnostics") as? Bool) ?? true
     }
 
     /// Starts muted — useful when capturing screenshots in bulk.
     public static var startMuted: Bool {
         UserDefaults.standard.bool(forKey: "nesMuted")
+    }
+
+    /// Buttons to draw as held, e.g. `-nesHoldButtons up,a`.
+    ///
+    /// Screenshot support only. A simulator cannot hold a touch, so the press
+    /// callouts are otherwise uncapturable and would go to a device unverified
+    /// — which is exactly how the control cluster once shipped off-screen.
+    ///
+    /// This seeds the *visual* state and nothing else. It deliberately does not
+    /// reach `setButton`: a screenshot run must not feed phantom input to the
+    /// game.
+    public static var forcedHeldButtons: NESButton {
+        guard let raw = UserDefaults.standard.string(forKey: "nesHoldButtons")
+        else { return [] }
+
+        let names: [String: NESButton] = [
+            "up": .up, "down": .down, "left": .left, "right": .right,
+            "select": .select, "start": .start, "a": .a, "b": .b,
+        ]
+        return raw.lowercased()
+            .split(separator: ",")
+            .compactMap { names[$0.trimmingCharacters(in: .whitespaces)] }
+            .reduce(into: NESButton()) { $0.formUnion($1) }
     }
 
     /// Opens the in-game menu at launch, so its layout can be captured without

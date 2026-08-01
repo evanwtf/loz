@@ -46,6 +46,44 @@ public final class EmulatorHost: ObservableObject {
 
     @Published public private(set) var profile = FrameProfile()
 
+    /// How long a touch took to reach us.
+    ///
+    /// `DragGesture.Value.time` is the timestamp of the *event*, not of the
+    /// handler run. Subtracting it from now therefore measures everything
+    /// between the finger landing and this class being told: UIKit's delivery,
+    /// the run loop's availability, and SwiftUI's gesture recognition. That is
+    /// precisely the window "the button took half a second" lives in, and no
+    /// timer inside the frame loop can see it — which is why three rounds of
+    /// reasoning about the frame loop got nowhere.
+    public struct InputLatency: Equatable {
+        public var lastMS: Double = 0
+        public var worstMS: Double = 0
+        public var samples: Int = 0
+    }
+
+    @Published public private(set) var inputLatency = InputLatency()
+
+    /// Records the delivery latency of one input event.
+    public func noteInputEvent(at eventTime: Date) {
+        let ms = Date().timeIntervalSince(eventTime) * 1000
+        // A negative or absurd reading means the clocks disagree rather than
+        // that input took ten seconds; drop it instead of poisoning the worst
+        // case, which is the number a diagnosis will hang on.
+        guard ms >= 0, ms < 10000 else { return }
+        inputLatency = InputLatency(
+            lastMS: ms,
+            worstMS: max(inputLatency.worstMS, ms),
+            samples: inputLatency.samples + 1)
+        if ms > 100 {
+            Log.ui.notice("input delivered \(ms, format: .fixed(precision: 0), privacy: .public) ms late")
+        }
+    }
+
+    /// Clears the worst-case reading so a fix can be judged on fresh numbers.
+    public func resetInputLatency() {
+        inputLatency = InputLatency()
+    }
+
     /// Multiplies emulation speed; held down for fast-forward.
     @Published public var speedMultiplier: Int = 1
 

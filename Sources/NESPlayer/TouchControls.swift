@@ -15,6 +15,13 @@ import SwiftUI
         let host: EmulatorHost
         let layout: ControlLayout
 
+        /// Which buttons are held, hoisted out of the individual controls so
+        /// the callouts can be drawn away from the fingers causing them. This
+        /// is set on exactly the transitions that call `host.setButton`, so a
+        /// callout means "the emulator has been told" — which makes it a
+        /// readout of input latency as well as of state.
+        @State private var held: NESButton = LaunchOptions.forcedHeldButtons
+
         var body: some View {
             switch layout {
             case .portrait:
@@ -38,14 +45,26 @@ import SwiftUI
         private func portrait(_ size: CGSize) -> some View {
             let metrics = ControlMetrics.portrait(in: size)
 
-            return HStack(alignment: .center, spacing: metrics.gap) {
-                DPadControl(host: host, size: metrics.dpadSize)
-
-                VStack(spacing: metrics.buttonSize * 0.34) {
-                    systemRow(buttonSize: metrics.buttonSize)
-                    actionRow(buttonSize: metrics.buttonSize)
+            return VStack(spacing: 10) {
+                // Callouts sit directly above the cluster they describe, in
+                // space that is otherwise empty, so each pin points at its own
+                // group rather than at a shared strip.
+                HStack(alignment: .bottom, spacing: metrics.gap) {
+                    CalloutRow(held: held, names: CalloutRow.directions)
+                        .frame(width: metrics.dpadSize)
+                    CalloutRow(held: held, names: CalloutRow.actions)
+                        .frame(width: metrics.columnWidth)
                 }
-                .frame(width: metrics.columnWidth)
+
+                HStack(alignment: .center, spacing: metrics.gap) {
+                    DPadControl(host: host, size: metrics.dpadSize, held: $held)
+
+                    VStack(spacing: metrics.buttonSize * 0.34) {
+                        systemRow(buttonSize: metrics.buttonSize)
+                        actionRow(buttonSize: metrics.buttonSize)
+                    }
+                    .frame(width: metrics.columnWidth)
+                }
             }
             .padding(.horizontal, metrics.margin)
             // The inset must be applied *inside* the frame. Outside it, the
@@ -66,17 +85,38 @@ import SwiftUI
             let metrics = ControlMetrics.landscape(controlWidth: controlWidth, height: height)
 
             return HStack(spacing: 0) {
-                DPadControl(host: host, size: metrics.dpadSize)
-                    .frame(width: controlWidth, height: height, alignment: .center)
+                column(width: controlWidth, height: height,
+                       callouts: CalloutRow.directions)
+                {
+                    DPadControl(host: host, size: metrics.dpadSize, held: $held)
+                }
 
                 Spacer(minLength: 0)
 
-                VStack(spacing: metrics.buttonSize * 0.30) {
-                    systemRow(buttonSize: metrics.buttonSize * 0.92)
-                    actionRow(buttonSize: metrics.buttonSize)
+                column(width: controlWidth, height: height,
+                       callouts: CalloutRow.actions)
+                {
+                    VStack(spacing: metrics.buttonSize * 0.30) {
+                        systemRow(buttonSize: metrics.buttonSize * 0.92)
+                        actionRow(buttonSize: metrics.buttonSize)
+                    }
                 }
-                .frame(width: controlWidth, height: height, alignment: .center)
             }
+        }
+
+        /// One landscape side column: the cluster centred, its callouts pinned
+        /// just above it in the dead space the centring leaves behind.
+        private func column(
+            width: CGFloat,
+            height: CGFloat,
+            callouts: [(button: NESButton, title: String)],
+            @ViewBuilder content: () -> some View
+        ) -> some View {
+            VStack(spacing: 10) {
+                CalloutRow(held: held, names: callouts)
+                content()
+            }
+            .frame(width: width, height: height, alignment: .center)
         }
 
         // MARK: Shared pieces
@@ -84,16 +124,18 @@ import SwiftUI
         private func systemRow(buttonSize: CGFloat) -> some View {
             HStack(spacing: buttonSize * 0.26) {
                 SystemButton(title: "SELECT", button: .select, host: host,
-                             width: buttonSize * 1.02)
+                             width: buttonSize * 1.02, held: $held)
                 SystemButton(title: "START", button: .start, host: host,
-                             width: buttonSize * 1.02)
+                             width: buttonSize * 1.02, held: $held)
             }
         }
 
         private func actionRow(buttonSize: CGFloat) -> some View {
             HStack(spacing: buttonSize * 0.34) {
-                ActionButton(title: "B", button: .b, host: host, size: buttonSize)
-                ActionButton(title: "A", button: .a, host: host, size: buttonSize)
+                ActionButton(title: "B", button: .b, host: host,
+                             size: buttonSize, held: $held)
+                ActionButton(title: "A", button: .a, host: host,
+                             size: buttonSize, held: $held)
                     .offset(y: -buttonSize * 0.26)
             }
         }
@@ -116,17 +158,13 @@ import SwiftUI
         /// `ControlMetrics` already knows this number, so the measurement was
         /// never necessary.
         let size: CGFloat
-        @State private var active: NESButton = []
+        @Binding var held: NESButton
 
-        /// Where each direction's pressed indicator sits, as a fraction of the
-        /// pad's edge. Pulled in from the arm tips so a thumb resting on an arm
-        /// does not cover its own feedback.
-        private static let arms: [(button: NESButton, unit: CGPoint)] = [
-            (.up, CGPoint(x: 0.50, y: 0.28)),
-            (.down, CGPoint(x: 0.50, y: 0.72)),
-            (.left, CGPoint(x: 0.28, y: 0.50)),
-            (.right, CGPoint(x: 0.72, y: 0.50)),
-        ]
+        private static let directions: [NESButton] = [.up, .down, .left, .right]
+
+        private var active: NESButton {
+            held.intersection(NESButton(Self.directions))
+        }
 
         var body: some View {
             ZStack {
@@ -136,40 +174,30 @@ import SwiftUI
                 Image(systemName: "dpad")
                     .resizable()
                     .foregroundStyle(.white.opacity(0.5))
-                // A thumb covers the arm it is pressing, so the pad gave no
-                // feedback at all: "I can't tell if down is being pressed"
-                // is unanswerable while the only signal is under a finger.
-                // These sit inboard of the arms, where they stay visible.
-                ForEach(0..<Self.arms.count, id: \.self) { index in
-                    let arm = Self.arms[index]
-                    if active.contains(arm.button) {
-                        Circle()
-                            .fill(.white.opacity(0.9))
-                            .frame(width: size * 0.13, height: size * 0.13)
-                            .position(x: arm.unit.x * size, y: arm.unit.y * size)
-                    }
-                }
             }
             .frame(width: size, height: size)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
+                        host.noteInputEvent(at: value.time)
                         apply(DPadGeometry.direction(at: value.location, in: size))
                     }
                     .onEnded { _ in apply([]) })
         }
 
         private func apply(_ next: NESButton) {
-            guard next != active else { return }
-            for direction in [NESButton.up, .down, .left, .right] {
-                let wasHeld = active.contains(direction)
+            let current = active
+            guard next != current else { return }
+            for direction in Self.directions {
+                let wasHeld = current.contains(direction)
                 let isHeld = next.contains(direction)
                 if wasHeld != isHeld {
                     host.setButton(direction, pressed: isHeld)
                 }
             }
-            active = next
+            held.subtract(NESButton(Self.directions))
+            held.formUnion(next)
             if !next.isEmpty { Haptics.direction() }
         }
     }
@@ -181,6 +209,7 @@ import SwiftUI
         let button: NESButton
         let host: EmulatorHost
         var size: CGFloat = 74
+        @Binding var held: NESButton
         @State private var isPressed = false
 
         var body: some View {
@@ -196,15 +225,18 @@ import SwiftUI
                 .animation(.easeOut(duration: 0.06), value: isPressed)
                 .gesture(
                     DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
+                        .onChanged { value in
+                            host.noteInputEvent(at: value.time)
                             guard !isPressed else { return }
                             isPressed = true
                             host.setButton(button, pressed: true)
+                            held.insert(button)
                             Haptics.action()
                         }
                         .onEnded { _ in
                             isPressed = false
                             host.setButton(button, pressed: false)
+                            held.remove(button)
                         })
         }
     }
@@ -214,6 +246,7 @@ import SwiftUI
         let button: NESButton
         let host: EmulatorHost
         var width: CGFloat = 74
+        @Binding var held: NESButton
         @State private var isPressed = false
 
         var body: some View {
@@ -229,15 +262,18 @@ import SwiftUI
                 .frame(width: width, height: width * 0.34)
                 .gesture(
                     DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
+                        .onChanged { value in
+                            host.noteInputEvent(at: value.time)
                             guard !isPressed else { return }
                             isPressed = true
                             host.setButton(button, pressed: true)
+                            held.insert(button)
                             Haptics.system()
                         }
                         .onEnded { _ in
                             isPressed = false
                             host.setButton(button, pressed: false)
+                            held.remove(button)
                         })
         }
     }
