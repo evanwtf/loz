@@ -84,6 +84,7 @@ public final class EmulatorHost: ObservableObject {
     private var clock: FrameClock?
     private var lastFPSSample = CFAbsoluteTimeGetCurrent()
     private var framesSinceSample = 0
+    private var lastPresentedCount = 0
 
     /// Frame-budget accounting. Always on: two clock reads per frame cost
     /// nothing measurable, and gating it behind a launch option meant the one
@@ -300,6 +301,16 @@ public final class EmulatorHost: ObservableObject {
             diagnostics.framesPerSecond = Double(framesSinceSample) / elapsed
             framesSinceSample = 0
             lastFPSSample = now
+
+            // Sample what the display actually took, alongside what was
+            // emulated. Emulating a frame is not the same as showing one.
+            var shown = Presentation()
+            shown.shownPerSecond =
+                Double(frames.presented - lastPresentedCount) / elapsed
+            shown.staleMS = frames.lastStaleMS
+            shown.worstStaleMS = frames.worstStaleMS
+            diagnostics.presentation = shown
+            lastPresentedCount = frames.presented
         }
 
         // Flush the save file periodically rather than on every write, so a
@@ -321,7 +332,7 @@ public final class EmulatorHost: ObservableObject {
     }
 
     private func renderCurrentFrame() {
-        frames.image = FrameRenderer.image(from: nes.framebuffer)
+        frames.publish(FrameRenderer.image(from: nes.framebuffer))
     }
 
     /// Total samples the APU has produced since launch. Diagnostic: if this is

@@ -58,6 +58,29 @@ public final class DiagnosticsStream: ObservableObject {
     @Published public internal(set) var framesPerSecond: Double = 0
     @Published public internal(set) var profile = FrameProfile()
     @Published public internal(set) var inputLatency = InputLatency()
+    @Published public internal(set) var presentation = Presentation()
+
+    public init() {}
+}
+
+/// How much of what the emulator draws actually reaches the screen.
+///
+/// The number that was missing. Everything else measured work the app *did*;
+/// this measures what the player *saw*, and the two came apart completely — a
+/// screen recording showed the picture unchanged for twenty seconds while the
+/// frame clock reported a steady 60 fps throughout.
+///
+/// It is also the only input measurement that does not arrive too late to be
+/// useful. A callout or a latency sample can only be recorded once the press
+/// has finally landed, so neither can show the delay preceding it. This runs
+/// continuously and needs no press at all: `shownPerSecond` far below the
+/// emulated rate *is* the lag, whether or not anyone is touching the screen.
+public struct Presentation: Equatable {
+    /// Frames per second that actually reached the display.
+    public var shownPerSecond: Double = 0
+    /// Age of the picture currently on screen.
+    public var staleMS: Double = 0
+    public var worstStaleMS: Double = 0
 
     public init() {}
 }

@@ -9,7 +9,39 @@ import SwiftUI
 public final class FrameStream: ObservableObject {
     @Published public internal(set) var image: CGImage?
 
+    /// When the current image was produced, and how many have been produced.
+    /// Deliberately unpublished: they are read alongside `image`, and
+    /// publishing them would double the invalidations for no gain.
+    public internal(set) var producedAt: CFAbsoluteTime = 0
+    public internal(set) var produced = 0
+
+    /// Presentation accounting, written by the view that actually draws.
+    ///
+    /// Frames produced and frames *shown* are different numbers, and the gap
+    /// between them is invisible from the emulator side: a screen recording
+    /// caught the picture unchanged for twenty seconds while the frame clock
+    /// reported a steady 60 fps. Emulating a frame is not the same as anyone
+    /// seeing it, and only the drawing view knows which happened.
+    public internal(set) var presented = 0
+    public internal(set) var lastStaleMS: Double = 0
+    public internal(set) var worstStaleMS: Double = 0
+
     public init() {}
+
+    /// Called by `GameScreen` when a new image reaches the display.
+    func notePresented() {
+        presented += 1
+        let ms = (CFAbsoluteTimeGetCurrent() - producedAt) * 1000
+        lastStaleMS = ms
+        worstStaleMS = max(worstStaleMS, ms)
+    }
+
+    /// Records a freshly rendered picture.
+    func publish(_ image: CGImage?) {
+        producedAt = CFAbsoluteTimeGetCurrent()
+        produced += 1
+        self.image = image
+    }
 }
 
 /// The game screen: a nearest-neighbour scaled framebuffer.
@@ -34,6 +66,13 @@ public struct GameScreen: View {
             } else {
                 Color.black
             }
+        }
+        // Fires after this view has taken the new image, which is the closest
+        // signal available to "it is on the glass". Counting here rather than
+        // where frames are produced is the whole point: the two numbers
+        // diverged badly and nothing upstream could tell.
+        .onChange(of: stream.produced) { _, _ in
+            stream.notePresented()
         }
         // The NES pushed a 256x240 buffer to a 4:3 screen, so pixels were
         // slightly tall. Matching that is what makes the picture look right
@@ -217,7 +256,17 @@ struct DiagnosticsOverlay: View {
     ///   timings survive in both forms — they are the reason this exists.
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(String(format: "%.0f fps", stream.framesPerSecond))
+            Text(String(format: "%.0f fps emulated", stream.framesPerSecond))
+            // The headline number. Frames the display actually took, and how
+            // old the picture on screen is. Unlike a callout or a latency
+            // sample, this does not need a press to show the problem — it is
+            // running whether or not anyone is touching the screen.
+            Text(String(format: "%.0f fps SHOWN", stream.presentation.shownPerSecond))
+                .foregroundStyle(stream.presentation.shownPerSecond < 45 ? .red : .green)
+            Text(String(format: "stale %.0f max %.0f ms",
+                        stream.presentation.staleMS,
+                        stream.presentation.worstStaleMS))
+                .foregroundStyle(stream.presentation.worstStaleMS > 100 ? .red : .green)
             // The frame budget, on screen. `gap` is the one that matters for
             // input latency: it is the spacing between ticks, so it counts
             // main-thread work this class never sees — SwiftUI re-evaluating
