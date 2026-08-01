@@ -66,6 +66,11 @@ public enum LaunchOptions {
         UserDefaults.standard.bool(forKey: "nesMenu")
     }
 
+    /// Opens the tap test at launch, for the same reason.
+    public static var openTapTest: Bool {
+        UserDefaults.standard.bool(forKey: "nesTapTest")
+    }
+
     #if os(iOS)
         /// Asks the window scene to adopt the requested orientation, if any.
         @MainActor

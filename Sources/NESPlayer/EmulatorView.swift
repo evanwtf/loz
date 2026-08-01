@@ -90,6 +90,7 @@ public struct EmulatorView: View {
     @StateObject private var store: SaveStateStore
     @State private var showDiagnostics = LaunchOptions.showDiagnostics
     @State private var showMenu = LaunchOptions.openMenu
+    @State private var showTapTest = LaunchOptions.openTapTest
 
     public init(host: EmulatorHost) {
         self.host = host
@@ -130,9 +131,17 @@ public struct EmulatorView: View {
                 if showMenu {
                     GameMenu(host: host, store: store,
                              isPresented: $showMenu,
-                             showDiagnostics: $showDiagnostics)
+                             showDiagnostics: $showDiagnostics,
+                             showTapTest: $showTapTest)
                 }
             }
+        #if os(iOS)
+            .overlay {
+                if showTapTest {
+                    TapTest(host: host, isPresented: $showTapTest)
+                }
+            }
+        #endif
             .modifier(KeyboardControls(host: host, showDiagnostics: $showDiagnostics))
             .modifier(GameControllerSupport(host: host))
     }

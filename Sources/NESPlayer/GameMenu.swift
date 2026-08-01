@@ -11,6 +11,7 @@ struct GameMenu: View {
     @ObservedObject var store: SaveStateStore
     @Binding var isPresented: Bool
     @Binding var showDiagnostics: Bool
+    @Binding var showTapTest: Bool
 
     @State private var confirmingReset = false
 
@@ -89,6 +90,22 @@ struct GameMenu: View {
             Toggle(isOn: $showDiagnostics) {
                 Label("Diagnostics", systemImage: "waveform.path.ecg")
             }
+
+            #if os(iOS)
+                Button {
+                    // Close the menu but leave the game running: a
+                    // responsiveness test with the emulator paused would
+                    // remove the load it is meant to measure.
+                    isPresented = false
+                    host.isPaused = false
+                    showTapTest = true
+                } label: {
+                    Label("Tap test", systemImage: "hand.tap")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(.gray)
+            #endif
 
             Button {
                 if confirmingReset {
