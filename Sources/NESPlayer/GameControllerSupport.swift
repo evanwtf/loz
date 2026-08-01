@@ -69,53 +69,47 @@ struct GameControllerSupport: ViewModifier {
         guard let pad = controller.extendedGamepad else { return }
         hasController = true
 
+        // Deliver on the main queue and act immediately, rather than hopping
+        // through a `Task` per event. The default queue is not the main one, so
+        // every press was costing a scheduling round trip before it reached the
+        // emulator — small, but it is pure latency on the one path where
+        // latency is the whole point.
+        controller.handlerQueue = .main
+
+        let press: (NESButton) -> (GCControllerButtonInput, Float, Bool) -> Void = { button in
+            { _, _, pressed in
+                MainActor.assumeIsolated { host.setButton(button, pressed: pressed) }
+            }
+        }
+
         // Face buttons. A/B are swapped relative to the Xbox layout so that the
         // physical right-hand button is NES A, which is what muscle memory and
         // the on-screen layout both expect.
-        pad.buttonA.pressedChangedHandler = { _, _, pressed in
-            Task { @MainActor in host.setButton(.a, pressed: pressed) }
-        }
-        pad.buttonB.pressedChangedHandler = { _, _, pressed in
-            Task { @MainActor in host.setButton(.b, pressed: pressed) }
-        }
+        pad.buttonA.pressedChangedHandler = press(.a)
+        pad.buttonB.pressedChangedHandler = press(.b)
         // Mirror onto X/Y so either row works for rapid sword-and-item play.
-        pad.buttonX.pressedChangedHandler = { _, _, pressed in
-            Task { @MainActor in host.setButton(.b, pressed: pressed) }
-        }
-        pad.buttonY.pressedChangedHandler = { _, _, pressed in
-            Task { @MainActor in host.setButton(.a, pressed: pressed) }
-        }
+        pad.buttonX.pressedChangedHandler = press(.b)
+        pad.buttonY.pressedChangedHandler = press(.a)
 
-        pad.buttonMenu.pressedChangedHandler = { _, _, pressed in
-            Task { @MainActor in host.setButton(.start, pressed: pressed) }
-        }
-        pad.buttonOptions?.pressedChangedHandler = { _, _, pressed in
-            Task { @MainActor in host.setButton(.select, pressed: pressed) }
-        }
+        pad.buttonMenu.pressedChangedHandler = press(.start)
+        pad.buttonOptions?.pressedChangedHandler = press(.select)
 
-        pad.dpad.valueChangedHandler = { _, xAxis, yAxis in
-            Task { @MainActor in
+        let steer: (GCControllerDirectionPad, Float, Float) -> Void = { _, xAxis, yAxis in
+            MainActor.assumeIsolated {
                 host.setButton(.left, pressed: xAxis < -0.5)
                 host.setButton(.right, pressed: xAxis > 0.5)
                 host.setButton(.down, pressed: yAxis < -0.5)
                 host.setButton(.up, pressed: yAxis > 0.5)
             }
         }
-
+        pad.dpad.valueChangedHandler = steer
         // The stick drives the same d-pad, with a generous dead zone so a
         // resting thumb does not creep Link into a wall.
-        pad.leftThumbstick.valueChangedHandler = { _, xAxis, yAxis in
-            Task { @MainActor in
-                host.setButton(.left, pressed: xAxis < -0.5)
-                host.setButton(.right, pressed: xAxis > 0.5)
-                host.setButton(.down, pressed: yAxis < -0.5)
-                host.setButton(.up, pressed: yAxis > 0.5)
-            }
-        }
+        pad.leftThumbstick.valueChangedHandler = steer
 
         // Shoulder button for fast-forward, invaluable when exploring.
         pad.rightShoulder.pressedChangedHandler = { _, _, pressed in
-            Task { @MainActor in host.speedMultiplier = pressed ? 4 : 1 }
+            MainActor.assumeIsolated { host.speedMultiplier = pressed ? 4 : 1 }
         }
     }
 }

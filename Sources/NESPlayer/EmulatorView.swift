@@ -92,6 +92,11 @@ public struct EmulatorView: View {
     @State private var showMenu = LaunchOptions.openMenu
     @State private var showTapTest = LaunchOptions.openTapTest
 
+    /// Use Apple's `GCVirtualController` instead of the hand-drawn pad.
+    /// Persisted, because it is a preference about how the game feels rather
+    /// than a debugging switch.
+    @AppStorage("nesSystemControls") private var useSystemControls = false
+
     public init(host: EmulatorHost) {
         self.host = host
         _store = StateObject(wrappedValue: SaveStateStore(
@@ -103,7 +108,19 @@ public struct EmulatorView: View {
             .background(Color.black)
             .ignoresSafeArea(edges: .bottom)
             .onAppear { host.start() }
-            .onDisappear { host.stop() }
+            .onDisappear {
+                host.stop()
+                #if os(iOS)
+                    VirtualPad.shared.disconnect()
+                #endif
+            }
+        #if os(iOS)
+            // `initial: true` so the pad is present at launch when the
+            // preference is already on, not only when it is toggled.
+            .onChange(of: useSystemControls, initial: true) { _, on in
+                on ? VirtualPad.shared.connect() : VirtualPad.shared.disconnect()
+            }
+        #endif
             .onChange(of: scenePhase) { _, phase in
                 switch phase {
                 case .inactive, .background:
@@ -166,11 +183,15 @@ public struct EmulatorView: View {
     @ViewBuilder
     private var content: some View {
         #if os(iOS)
-            GeometryReader { geometry in
-                if geometry.size.width > geometry.size.height {
-                    landscape(geometry.size)
-                } else {
-                    portrait(geometry.size)
+            if useSystemControls {
+                systemControls
+            } else {
+                GeometryReader { geometry in
+                    if geometry.size.width > geometry.size.height {
+                        landscape(geometry.size)
+                    } else {
+                        portrait(geometry.size)
+                    }
                 }
             }
         #else
@@ -186,6 +207,32 @@ public struct EmulatorView: View {
     }
 
     #if os(iOS)
+        /// Layout for Apple's virtual controller.
+        ///
+        /// The pad lives in a system window over this one, so the app draws
+        /// only the picture and gets out of the way. SELECT and START have no
+        /// virtual equivalent, so they stay as ordinary buttons — placed at the
+        /// top, away from where the thumbs rest, since Zelda needs them
+        /// occasionally rather than constantly.
+        private var systemControls: some View {
+            GameScreen(stream: host.frames)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay(alignment: .topLeading) {
+                    if showDiagnostics { diagnostics(compact: true) }
+                }
+                .overlay(alignment: .top) { selectStartRow }
+        }
+
+        private var selectStartRow: some View {
+            HStack(spacing: 10) {
+                SystemButton(title: "SELECT", button: .select, host: host,
+                             width: 86, held: .constant([]))
+                SystemButton(title: "START", button: .start, host: host,
+                             width: 86, held: .constant([]))
+            }
+            .padding(.top, 6)
+        }
+
         private func portrait(_ size: CGSize) -> some View {
             VStack(spacing: 0) {
                 GameScreen(stream: host.frames)

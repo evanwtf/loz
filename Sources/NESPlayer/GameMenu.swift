@@ -14,6 +14,7 @@ struct GameMenu: View {
     @Binding var showTapTest: Bool
 
     @State private var confirmingReset = false
+    @AppStorage("nesSystemControls") private var useSystemControls = false
 
     var body: some View {
         ZStack {
@@ -90,6 +91,11 @@ struct GameMenu: View {
             Toggle(isOn: $showDiagnostics) {
                 Label("Diagnostics", systemImage: "waveform.path.ecg")
             }
+            #if os(iOS)
+                Toggle(isOn: $useSystemControls) {
+                    Label("Apple on-screen controls", systemImage: "gamecontroller")
+                }
+            #endif
 
             #if os(iOS)
                 Button {
