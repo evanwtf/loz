@@ -45,10 +45,19 @@ import NESCore
             // Only the controls that need to feel right. START and SELECT have
             // no virtual equivalent and are handled in the app's own UI.
             // A direction pad, not a thumbstick: this is a NES game and its
-            // movement is eight-way. Note that requesting both is not allowed —
-            // the app exits on connect — and that the simulator draws the face
-            // buttons but not the left-hand element, so this configuration can
-            // only be judged on a device.
+            // movement is eight-way.
+            //
+            // Two things about this that cost an evening to establish, both
+            // proven with the standalone `PadTest` app:
+            //
+            // Requesting a direction pad *and* a thumbstick terminates the app
+            // on connect. Only one left-hand element is allowed.
+            //
+            // More importantly, the left-hand element is only drawn in
+            // landscape. In portrait the face buttons appear and the d-pad is
+            // omitted, with no error and no diagnostic — the request is
+            // accepted and quietly half-honoured. `elements` reads back
+            // correctly either way, so nothing in the API reveals it.
             configuration.elements = [
                 GCInputDirectionPad,
                 GCInputButtonA,

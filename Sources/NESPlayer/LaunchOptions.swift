@@ -72,19 +72,31 @@ public enum LaunchOptions {
     }
 
     #if os(iOS)
+        /// Rotates to landscape, for callers that need it rather than prefer it.
+        ///
+        /// `GCVirtualController` draws its d-pad only in landscape, so enabling
+        /// Apple's on-screen controls in portrait yields A and B and no way to
+        /// move.
+        @MainActor
+        public static func requestLandscape() {
+            apply(.landscapeRight)
+        }
+
         /// Asks the window scene to adopt the requested orientation, if any.
         @MainActor
         public static func applyRequestedOrientation() {
             guard let requested = requestedOrientation else { return }
 
-            let mask: UIInterfaceOrientationMask
             switch requested {
-            case "landscape", "landscaperight": mask = .landscapeRight
-            case "landscapeleft":               mask = .landscapeLeft
-            case "portrait":                    mask = .portrait
+            case "landscape", "landscaperight": apply(.landscapeRight)
+            case "landscapeleft":               apply(.landscapeLeft)
+            case "portrait":                    apply(.portrait)
             default:                            return
             }
+        }
 
+        @MainActor
+        private static func apply(_ mask: UIInterfaceOrientationMask) {
             guard let scene = UIApplication.shared.connectedScenes
                 .compactMap({ $0 as? UIWindowScene })
                 .first

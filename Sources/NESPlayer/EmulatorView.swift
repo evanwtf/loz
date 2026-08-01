@@ -118,7 +118,16 @@ public struct EmulatorView: View {
             // `initial: true` so the pad is present at launch when the
             // preference is already on, not only when it is toggled.
             .onChange(of: useSystemControls, initial: true) { _, on in
-                on ? VirtualPad.shared.connect() : VirtualPad.shared.disconnect()
+                if on {
+                    // Apple's pad only draws its d-pad in landscape, so turning
+                    // it on in portrait would leave the game with A and B and no
+                    // way to move. Ask for landscape rather than hand someone
+                    // controls that cannot walk.
+                    LaunchOptions.requestLandscape()
+                    VirtualPad.shared.connect()
+                } else {
+                    VirtualPad.shared.disconnect()
+                }
             }
         #endif
             .onChange(of: scenePhase) { _, phase in

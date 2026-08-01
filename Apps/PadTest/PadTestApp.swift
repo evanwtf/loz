@@ -31,6 +31,8 @@ final class PadState: ObservableObject {
     @Published var status = "connecting…"
     /// Buttons, shown as they are pressed.
     @Published var buttons = ""
+    /// Exactly what was asked for, so a silently-ignored request is visible.
+    @Published var requested = ""
 
     private var virtual: GCVirtualController?
     private var mover: Timer?
@@ -47,12 +49,16 @@ final class PadState: ObservableObject {
         case dpad = "d-pad"
         case thumbstick = "stick"
         case none = "buttons only"
+        /// Apple's own default set, with `elements` never assigned. If this
+        /// draws a stick when an explicit set does not, the fault is in how the
+        /// set is built rather than in the framework.
+        case standard = "default"
 
         var input: String? {
             switch self {
             case .dpad: GCInputDirectionPad
             case .thumbstick: GCInputLeftThumbstick
-            case .none: nil
+            case .none, .standard: nil
             }
         }
     }
@@ -75,8 +81,11 @@ final class PadState: ObservableObject {
 
     private func connect(_ element: LeftElement) {
         let configuration = GCVirtualController.Configuration()
-        configuration.elements = Set(
-            [element.input, GCInputButtonA, GCInputButtonB].compactMap { $0 })
+        if element != .standard {
+            configuration.elements = Set(
+                [element.input, GCInputButtonA, GCInputButtonB].compactMap { $0 })
+        }
+        requested = configuration.elements.sorted().joined(separator: " ")
 
         let pad = GCVirtualController(configuration: configuration)
         virtual = pad
@@ -161,10 +170,11 @@ struct PadTestView: View {
                 Text("Apple virtual controller test")
                     .font(.headline)
                 Text(pad.status)
+                Text("asked: \(pad.requested)")
                 Text("dpad  \(pad.reading)")
                 Text("button \(pad.buttons.isEmpty ? "—" : pad.buttons)")
-                Text("A recentres the dot")
-                    .foregroundStyle(.white.opacity(0.4))
+                Text("A recentres the dot. ROTATE: the d-pad only draws in\nlandscape — in portrait Apple omits it silently.")
+                    .foregroundStyle(.yellow.opacity(0.9))
 
                 HStack(spacing: 8) {
                     ForEach(PadState.LeftElement.allCases, id: \.self) { element in
