@@ -23,6 +23,14 @@ public struct ControlMetrics: Equatable {
     public let buttonSize: CGFloat
     /// Space reserved below the cluster so it sits where thumbs rest.
     public let bottomInset: CGFloat
+    /// Gap between the SELECT/START row and the action buttons.
+    ///
+    /// Generous on purpose. A thumb travelling to A passes directly under
+    /// START, and the cost of the two is asymmetric: A and B are pressed
+    /// constantly, while SELECT and START are pressed a handful of times a
+    /// session and interrupt the game when hit by accident. Distance is worth
+    /// more here than compactness.
+    public let systemRowGap: CGFloat
 
     /// Total horizontal extent, including margins.
     public var totalWidth: CGFloat {
@@ -34,9 +42,8 @@ public struct ControlMetrics: Equatable {
     /// raised slightly.
     public var totalHeight: CGFloat {
         let systemRowHeight = buttonSize * 1.02 * 0.34
-        let stackSpacing = buttonSize * 0.34
         let actionRowHeight = buttonSize * 1.26   // includes the A button offset
-        let columnHeight = systemRowHeight + stackSpacing + actionRowHeight
+        let columnHeight = systemRowHeight + systemRowGap + actionRowHeight
         return max(dpadSize, columnHeight) + bottomInset
     }
 
@@ -58,7 +65,8 @@ public struct ControlMetrics: Equatable {
             gap: gap,
             columnWidth: column,
             buttonSize: button,
-            bottomInset: max(size.height, 0) * 0.10)
+            bottomInset: max(size.height, 0) * 0.10,
+            systemRowGap: button * 1.30)
     }
 
     /// Landscape: pad and buttons in the margins either side of the screen.
@@ -72,7 +80,10 @@ public struct ControlMetrics: Equatable {
             gap: 0,
             columnWidth: max(controlWidth, 0),
             buttonSize: button,
-            bottomInset: 0)
+            bottomInset: 0,
+            // Tighter than portrait: a landscape column is short, and the
+            // cluster is centred in it rather than pushed against an edge.
+            systemRowGap: button * 0.80)
     }
 }
 

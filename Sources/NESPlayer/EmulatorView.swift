@@ -260,17 +260,17 @@ public struct EmulatorView: View {
             VStack(spacing: 0) {
                 GameScreen(stream: host.frames)
                     .frame(maxWidth: .infinity)
+                // A full-width box immediately below the picture. Laid out in
+                // the stack rather than floated over the controls, so it
+                // reserves its own space instead of sitting on top of whatever
+                // is beneath it.
+                if showDiagnostics {
+                    diagnostics(wide: true)
+                }
                 // Controls take all remaining height and scale into it, rather than
                 // sitting in a fixed strip with dead space above.
                 TouchControls(host: host, layout: .portrait(size))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // The cluster sits at the bottom of this band, leaving a
-                    // few hundred points of empty space directly beneath the
-                    // screen. That is where the diagnostics belong: legible,
-                    // and not covering the game.
-                    .overlay(alignment: .topLeading) {
-                        if showDiagnostics { diagnostics() }
-                    }
             }
         }
 
@@ -282,31 +282,39 @@ public struct EmulatorView: View {
             let screenWidth = min(size.height * (4.0 / 3.0), size.width * 0.62)
             let controlWidth = max((size.width - screenWidth) / 2, 0)
 
-            return ZStack {
+            // Reserve the bottom of the side columns for the readout, and give
+            // the controls the rest. Floating it over them instead put the box
+            // straight through the d-pad.
+            let readoutHeight: CGFloat = showDiagnostics ? 170 : 0
+
+            return ZStack(alignment: .top) {
                 GameScreen(stream: host.frames)
                     .frame(width: screenWidth, height: size.height)
 
-                TouchControls(
-                    host: host,
-                    layout: .landscape(controlWidth: controlWidth, height: size.height))
-            }
-            .frame(width: size.width, height: size.height)
-            // A landscape side column is only ~164 pt wide and the callouts
-            // claim the space directly above the cluster, so the readout goes
-            // below it, in compact form. The full-width version wraps here and
-            // collides with the pins.
-            .overlay(alignment: .bottomLeading) {
-                if showDiagnostics {
-                    diagnostics(compact: true)
-                        .frame(width: controlWidth, alignment: .leading)
+                VStack(spacing: 0) {
+                    TouchControls(
+                        host: host,
+                        layout: .landscape(
+                            controlWidth: controlWidth,
+                            height: size.height - readoutHeight))
+
+                    if showDiagnostics {
+                        HStack(spacing: 0) {
+                            diagnostics(compact: true, wide: true)
+                                .frame(width: controlWidth, alignment: .leading)
+                            Spacer(minLength: 0)
+                        }
+                        .frame(height: readoutHeight)
+                    }
                 }
             }
+            .frame(width: size.width, height: size.height)
         }
     #endif
 
-    private func diagnostics(compact: Bool = false) -> some View {
+    private func diagnostics(compact: Bool = false, wide: Bool = false) -> some View {
         DiagnosticsOverlay(
-            stream: host.diagnostics, host: host, compact: compact)
+            stream: host.diagnostics, host: host, compact: compact, wide: wide)
     }
 }
 
@@ -319,6 +327,9 @@ struct DiagnosticsOverlay: View {
     @ObservedObject var stream: DiagnosticsStream
     let host: EmulatorHost
     var compact = false
+    /// Stretch to the full width available, as a laid-out box rather than a
+    /// floating label.
+    var wide = false
 
     /// Pressed buttons as letters, or a dash when nothing is held.
     private static func padDescription(_ buttons: NESButton) -> String {
@@ -401,6 +412,7 @@ struct DiagnosticsOverlay: View {
         .font(.system(size: compact ? 9 : 11, weight: .medium, design: .monospaced))
         .fixedSize(horizontal: false, vertical: true)
         .foregroundStyle(.green)
+        .frame(maxWidth: wide ? .infinity : nil, alignment: .leading)
         .padding(8)
         .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
         .padding(8)

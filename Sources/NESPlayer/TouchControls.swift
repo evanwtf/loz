@@ -45,10 +45,11 @@ import SwiftUI
         private func portrait(_ size: CGSize) -> some View {
             let metrics = ControlMetrics.portrait(in: size)
 
-            return VStack(spacing: 10) {
-                // Callouts sit directly above the cluster they describe, in
-                // space that is otherwise empty, so each pin points at its own
-                // group rather than at a shared strip.
+            return VStack(spacing: 0) {
+                // Callouts ride at the top of the band, near the picture rather
+                // than just above the cluster. A pin an inch from the thumb
+                // that caused it competes for the same glance as the game; up
+                // here it is read with the screen, not with the controls.
                 HStack(alignment: .bottom, spacing: metrics.gap) {
                     CalloutRow(held: held, names: CalloutRow.directions)
                         .frame(width: metrics.dpadSize)
@@ -56,10 +57,12 @@ import SwiftUI
                         .frame(width: metrics.columnWidth)
                 }
 
+                Spacer(minLength: 0)
+
                 HStack(alignment: .center, spacing: metrics.gap) {
                     DPadControl(host: host, size: metrics.dpadSize, held: held)
 
-                    VStack(spacing: metrics.buttonSize * 0.34) {
+                    VStack(spacing: metrics.systemRowGap) {
                         systemRow(buttonSize: metrics.buttonSize)
                         actionRow(buttonSize: metrics.buttonSize)
                     }
@@ -96,7 +99,7 @@ import SwiftUI
                 column(width: controlWidth, height: height,
                        callouts: CalloutRow.actions)
                 {
-                    VStack(spacing: metrics.buttonSize * 0.30) {
+                    VStack(spacing: metrics.systemRowGap) {
                         systemRow(buttonSize: metrics.buttonSize * 0.92)
                         actionRow(buttonSize: metrics.buttonSize)
                     }
