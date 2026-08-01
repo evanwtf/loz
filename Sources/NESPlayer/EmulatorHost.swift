@@ -64,7 +64,31 @@ public final class EmulatorHost: ObservableObject {
     /// on a device that was otherwise healthy — a shape with no physical
     /// explanation, and a reminder that an instrument reporting a dramatic
     /// number is not the same as a discovery.
+    /// When the window probe last saw a touch begin, in `systemUptime`.
+    /// Used to time SwiftUI's gesture arbitration separately from delivery.
+    private var lastTouchBeganUptime: Double = 0
+
+    /// How long SwiftUI took to turn a delivered touch into a gesture callback.
+    ///
+    /// Delivery and recognition are different costs and only the first was
+    /// being measured. The window probe fails itself immediately, so it sees a
+    /// touch at the earliest possible moment; a `DragGesture` has to go through
+    /// arbitration first. The difference is what a raw `touchesBegan` in a
+    /// `UIViewRepresentable` would save, and it is worth knowing before
+    /// rewriting the controls to find out.
+    public func noteGestureHandled() {
+        guard lastTouchBeganUptime > 0 else { return }
+        let ms = (ProcessInfo.processInfo.systemUptime - lastTouchBeganUptime) * 1000
+        guard ms >= 0, ms < 5000 else { return }
+        let previous = diagnostics.gestureLatency
+        diagnostics.gestureLatency = InputLatency(
+            lastMS: ms,
+            worstMS: max(previous.worstMS, ms),
+            samples: previous.samples + 1)
+    }
+
     public func noteTouchLatency(_ ms: Double) {
+        lastTouchBeganUptime = ProcessInfo.processInfo.systemUptime
         let previous = diagnostics.inputLatency
         diagnostics.inputLatency = InputLatency(
             lastMS: ms,

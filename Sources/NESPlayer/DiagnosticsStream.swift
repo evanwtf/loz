@@ -58,6 +58,7 @@ public final class DiagnosticsStream: ObservableObject {
     @Published public internal(set) var framesPerSecond: Double = 0
     @Published public internal(set) var profile = FrameProfile()
     @Published public internal(set) var inputLatency = InputLatency()
+    @Published public internal(set) var gestureLatency = InputLatency()
     @Published public internal(set) var presentation = Presentation()
 
     public init() {}

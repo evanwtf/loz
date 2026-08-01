@@ -368,6 +368,15 @@ struct DiagnosticsOverlay: View {
                         stream.inputLatency.worstMS,
                         stream.inputLatency.samples))
                 .foregroundStyle(stream.inputLatency.worstMS > 100 ? .red : .green)
+            // Delivery and recognition are separate costs. This is the second:
+            // how long SwiftUI took to turn a delivered touch into a gesture
+            // callback, and therefore what dropping to a raw `touchesBegan`
+            // could save.
+            Text(String(format: "gest %.0f max %.0f ms n%d",
+                        stream.gestureLatency.lastMS,
+                        stream.gestureLatency.worstMS,
+                        stream.gestureLatency.samples))
+                .foregroundStyle(stream.gestureLatency.worstMS > 50 ? .red : .green)
             if !compact {
                 Text("bank \(host.nes.mapper.currentPRGBank)")
                 Text(String(format: "PC $%04X", host.nes.cpu.pc))
