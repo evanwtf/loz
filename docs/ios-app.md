@@ -107,11 +107,49 @@ The d-pad is deliberately a single tracked surface rather than four buttons.
 Zelda needs reliable diagonals, and discrete hit targets drop inputs when a
 thumb slides between directions — which happens constantly while dodging.
 
+### The controls do not use SwiftUI gestures
+
+They read `touchesBegan` directly, through `RawTouchSurface`. This is not a
+preference; `DragGesture(minimumDistance: 0)` made the game unplayable.
+
+A gesture recogniser must win arbitration against every other recogniser in the
+hierarchy before its handler runs. Measured on an iPhone 15 Pro, UIKit
+delivered a touch to the app in **13 ms** while the `DragGesture` handler ran
+**hundreds of milliseconds** later — a d-pad direction had to be held for over
+a second before Link took a step. `touchesBegan` has no arbitration: the view
+is first responder for the touch and hears about it immediately.
+
+If a control ever feels slow again, the `gest` line in the diagnostics overlay
+is the one to read. It times delivery → handler specifically, which is the
+quantity that was missing while several other timings all looked healthy.
+
+### Apple's on-screen controls
+
+`GCVirtualController` is available in the menu as an alternative. It draws and
+hit-tests in a system-owned window, entirely outside SwiftUI, so it cannot
+suffer any of the above.
+
+Two constraints, both established the hard way with the standalone `PadTest`
+app in `Apps/PadTest`:
+
+- **The d-pad only draws in landscape.** In portrait the face buttons appear
+  and the left-hand element is silently omitted — no error, and `elements`
+  reads back exactly what was requested. Enabling the option therefore rotates
+  to landscape.
+- **Requesting a direction pad and a thumbstick together terminates the app**
+  on connect. Only one left-hand element is allowed.
+
+`allElements` is no help in diagnosing either: it describes the
+`extendedGamepad` profile, not the on-screen controls, and always lists a full
+Direction Pad.
+
 ## Audio
 
-APU output plays through `AVAudioEngine`. The session uses the `.ambient`
-category with `.mixWithOthers`, so the game respects the silent switch and does
-not interrupt other audio.
+APU output plays through `AVAudioEngine`. The session uses the `.playback`
+category with `.mixWithOthers`: a game's audio is part of the game, so it does
+not obey the silent switch — but starting it still does not interrupt a
+podcast. (`.ambient` was the original choice and meant the game was silent on
+any phone that lives on silent, which is most of them.)
 
 Emulation runs on the main actor and CoreAudio drains on a real-time thread;
 the queue between them is guarded by `OSAllocatedUnfairLock`, which
@@ -191,26 +229,58 @@ logged is sensitive, and a redacted log is a useless one.
 
 ### Diagnostics overlay
 
-Toggle it from the in-game **⋯** menu, or launch with `-nesDiagnostics YES`.
-It reports frames per second, the current PRG bank, PC, scanline, the **live
-pad state**, and the **build identity**.
+**On by default** — this is a development build and the overlay is the only way
+to answer "did that press register, and how late?" while holding the device.
+Turn it off from the **⋯** menu, or launch with `-nesDiagnostics 0`.
 
-The last two exist because of specific dead ends. "The buttons do nothing" is
-ambiguous between a press never reaching the machine and the game ignoring one
-that did, and the pad line splits those apart without a debugger. The build
-line answers "is the phone actually running the fix I just installed", which is
-otherwise unanswerable from the device and is expensive to guess wrong in
-either direction.
+Each line answers a question that was, at some point, unanswerable:
 
-With diagnostics on, the frame loop also logs a budget breakdown every 120
-frames:
+| Line | What it tells you |
+|---|---|
+| `fps emulated` | The frame clock is ticking. |
+| `fps SHOWN` | Frames that actually reached the display. **Not the same number.** |
+| `stale` | Age of the picture on screen. |
+| `emu` / `img` | Work inside the tick. |
+| `gap` / `late` | Spacing between ticks — main-thread health. |
+| `touch` | UIKit delivery: finger → app. |
+| `gest` | Handler: delivery → the code that presses the button. |
+| `pad` | What the machine currently thinks is held. |
+| build identity | Whether the phone is running the fix you just installed. |
 
-```
-perf: 60.0 fps  emulate 1.20 ms  render 0.45 ms  budget 16.67 ms
-```
+The distinctions matter more than any single value. Chasing one input bug, the
+frame clock reported a flawless 60 fps with no late ticks throughout, while a
+screen recording showed the picture unchanged for twenty seconds: frames were
+being *produced* 60 times a second and *shown* three times a second. Nothing
+that measured the emulator could see it, because nothing was wrong with the
+emulator. `SHOWN` and `stale` exist for that.
 
-If `emulate + render` approaches 16.67 ms the main thread is saturated, and the
-first symptom is not a visibly slow picture — display link callbacks are
-privileged over touch delivery, so the game keeps animating while taps go
-unread. That is what a 120 Hz display link caused before the clock was pinned
-to 60 Hz.
+Likewise `touch` and `gest` are separate because delivery was fine at 13 ms
+while recognition took hundreds of milliseconds — one number healthy, the other
+the entire bug.
+
+A matching `perf:` line goes to the unified log every 120 frames. Note that
+`log collect` from an attached device **requires root**, which makes the log
+unavailable in exactly the situation it is wanted; that is why the numbers are
+on screen as well.
+
+#### Writing a diagnostic that can be trusted
+
+Four instruments in this app reported confident nonsense before they reported
+anything true. The failures rhyme, and are worth stating:
+
+- **Never silently discard "absurd" readings.** An early latency check dropped
+  anything over ten seconds. Every reading was absurd, so it recorded nothing
+  and displayed a steady `0 ms` — indistinguishable from perfect.
+- **Always show the sample count.** `touch 0 max 0` reads identically whether
+  delivery is instant or no event ever arrived. Opposite diagnoses.
+- **Know your clock's epoch.** `DragGesture.Value.time` is a `Date` whose epoch
+  is not the reference date; subtracting it from `Date()` yielded 25 years.
+  Calibrating against the best sample then produced readings alternating
+  between 0 ms and 757 ms — two tight modes hundreds of milliseconds apart, a
+  shape with no physical meaning. `UITouch.timestamp` has a documented epoch
+  (`ProcessInfo.systemUptime`) and needs no calibration.
+- **Sample once per event.** `onChanged` fires continuously while a finger is
+  down. Measuring on each callback turned "recognition latency" into hold
+  duration: a two-second press reported as 1631 ms.
+
+A dramatic number is not a discovery. Check the instrument first.
