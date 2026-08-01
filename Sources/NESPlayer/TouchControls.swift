@@ -180,7 +180,6 @@ import SwiftUI
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
-                        host.noteInputEvent(at: value.time)
                         apply(DPadGeometry.direction(at: value.location, in: size))
                     }
                     .onEnded { _ in apply([]) })
@@ -225,8 +224,7 @@ import SwiftUI
                 .animation(.easeOut(duration: 0.06), value: isPressed)
                 .gesture(
                     DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            host.noteInputEvent(at: value.time)
+                        .onChanged { _ in
                             guard !isPressed else { return }
                             isPressed = true
                             host.setButton(button, pressed: true)
@@ -262,8 +260,7 @@ import SwiftUI
                 .frame(width: width, height: width * 0.34)
                 .gesture(
                     DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            host.noteInputEvent(at: value.time)
+                        .onChanged { _ in
                             guard !isPressed else { return }
                             isPressed = true
                             host.setButton(button, pressed: true)

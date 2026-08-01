@@ -161,6 +161,16 @@ public struct EmulatorView: View {
         #endif
             .modifier(KeyboardControls(host: host, showDiagnostics: $showDiagnostics))
             .modifier(GameControllerSupport(host: host))
+        #if os(iOS)
+            // Zero-sized and non-interactive: it exists only to reach the
+            // window and attach a recogniser that observes touches without
+            // taking any.
+            .background {
+                TouchLatencyProbe(host: host)
+                    .frame(width: 0, height: 0)
+                    .allowsHitTesting(false)
+            }
+        #endif
     }
 
     /// The only permanent chrome. Small and translucent so it reads as part of

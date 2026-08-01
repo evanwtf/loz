@@ -111,10 +111,10 @@ import SwiftUI
                     .contentShape(Rectangle())
                     .gesture(
                         DragGesture(minimumDistance: 0)
-                            .onChanged { value in
+                            .onChanged { _ in
                                 guard !touchDown, !finished else { return }
                                 touchDown = true
-                                record(eventTime: value.time)
+                                record()
                             }
                             .onEnded { _ in touchDown = false })
             }
@@ -152,18 +152,19 @@ import SwiftUI
 
         // MARK: Recording
 
-        private func record(eventTime: Date) {
+        private func record() {
             let now = CFAbsoluteTimeGetCurrent()
             if startedAt == nil {
                 startedAt = now
                 framesShownAtStart = host.frames.presented
                 framesMadeAtStart = host.frames.produced
-                // Start each run's delivery calibration fresh, so a stall in a
-                // previous run cannot flatter this one.
-                InputClock.recalibrate()
+                host.resetInputLatency()
             }
             tapTimes.append(now)
-            latencies.append(InputClock.delayMS(since: eventTime))
+            // The window probe times the touch itself; read its latest reading
+            // rather than deriving one from the gesture's own timestamp, whose
+            // epoch is not usable.
+            latencies.append(host.diagnostics.inputLatency.lastMS)
             Haptics.action()
         }
 

@@ -56,15 +56,15 @@ public final class EmulatorHost: ObservableObject {
 
     public var framesPerSecond: Double { diagnostics.framesPerSecond }
 
-    /// Records the delivery latency of one input event.
+    /// Records an absolute touch-delivery latency, in milliseconds.
     ///
-    /// The reading is delay in excess of the best delivery seen — see
-    /// `InputClock` for why an absolute figure is not available. Note that
-    /// nothing is discarded here any more: the previous version guarded
-    /// against "absurd" values and, because every value was absurd, reported a
-    /// permanent zero that read exactly like perfect delivery.
-    public func noteInputEvent(at eventTime: Date) {
-        let ms = InputClock.delayMS(since: eventTime)
+    /// Fed by `TouchLatencyProbe` from `UITouch.timestamp`, which has a
+    /// documented epoch. The earlier route through `DragGesture.Value.time`
+    /// did not, and produced readings that alternated between 0 ms and 757 ms
+    /// on a device that was otherwise healthy — a shape with no physical
+    /// explanation, and a reminder that an instrument reporting a dramatic
+    /// number is not the same as a discovery.
+    public func noteTouchLatency(_ ms: Double) {
         let previous = diagnostics.inputLatency
         diagnostics.inputLatency = InputLatency(
             lastMS: ms,
