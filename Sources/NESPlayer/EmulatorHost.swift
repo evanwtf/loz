@@ -57,12 +57,14 @@ public final class EmulatorHost: ObservableObject {
     public var framesPerSecond: Double { diagnostics.framesPerSecond }
 
     /// Records the delivery latency of one input event.
+    ///
+    /// The reading is delay in excess of the best delivery seen — see
+    /// `InputClock` for why an absolute figure is not available. Note that
+    /// nothing is discarded here any more: the previous version guarded
+    /// against "absurd" values and, because every value was absurd, reported a
+    /// permanent zero that read exactly like perfect delivery.
     public func noteInputEvent(at eventTime: Date) {
-        let ms = Date().timeIntervalSince(eventTime) * 1000
-        // A negative or absurd reading means the clocks disagree rather than
-        // that input took ten seconds; drop it instead of poisoning the worst
-        // case, which is the number a diagnosis will hang on.
-        guard ms >= 0, ms < 10000 else { return }
+        let ms = InputClock.delayMS(since: eventTime)
         let previous = diagnostics.inputLatency
         diagnostics.inputLatency = InputLatency(
             lastMS: ms,

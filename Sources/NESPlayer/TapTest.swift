@@ -158,9 +158,12 @@ import SwiftUI
                 startedAt = now
                 framesShownAtStart = host.frames.presented
                 framesMadeAtStart = host.frames.produced
+                // Start each run's delivery calibration fresh, so a stall in a
+                // previous run cannot flatter this one.
+                InputClock.recalibrate()
             }
             tapTimes.append(now)
-            latencies.append(max(0, Date().timeIntervalSince(eventTime) * 1000))
+            latencies.append(InputClock.delayMS(since: eventTime))
             Haptics.action()
         }
 
@@ -217,10 +220,10 @@ import SwiftUI
                 Row(label: "taps/sec",
                     value: String(format: "%.1f", perSecond),
                     alarming: perSecond < 3),
-                Row(label: "delivery mean",
+                Row(label: "delivery mean +",
                     value: String(format: "%.1f ms", meanLatency),
                     alarming: meanLatency > 50),
-                Row(label: "delivery worst",
+                Row(label: "delivery worst +",
                     value: String(format: "%.0f ms", worstLatency),
                     alarming: worstLatency > 100),
                 Row(label: "longest gap",
@@ -246,20 +249,28 @@ import SwiftUI
             if tapTimes.count < 15 {
                 return "Too few taps to judge. Run it again and tap hard."
             }
-            if shownPerSecond < 45, worstLatency < 100 {
+            // Order matters: a display stall is the explanation that has
+            // actually been observed here, so it is tested first, and the
+            // delivery verdict is only reached when rendering looks healthy.
+            if shownPerSecond < 45 {
                 return """
                 Input is fine — every tap arrived promptly. The display is the \
                 problem: frames were emulated far faster than they were shown, \
                 so what you press happens and you see it late.
                 """
             }
-            if worstLatency >= 100 {
+            if worstLatency >= 100 || worstGapMS > 500 {
                 return """
-                Taps are arriving late, before any drawing happens. The delay \
-                is in touch delivery, not in rendering.
+                Rendering kept up, but taps did not arrive evenly. The delay is \
+                in touch delivery rather than drawing — worst excess \
+                \(Int(worstLatency)) ms, longest silence \(Int(worstGapMS)) ms.
                 """
             }
-            return "Input and display both healthy over this run."
+            return """
+            Input and display both healthy over this run: \
+            \(Int(shownPerSecond)) fps reached the screen and every tap landed \
+            within \(Int(worstLatency)) ms of the fastest.
+            """
         }
     }
 
