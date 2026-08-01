@@ -1,21 +1,32 @@
 import NESCore
 import SwiftUI
 
+/// Carries the picture, and nothing else.
+///
+/// Exists so that a view drawing the game does not drag every sibling into a
+/// rebuild sixty times a second. See `EmulatorHost.frames`.
+@MainActor
+public final class FrameStream: ObservableObject {
+    @Published public internal(set) var image: CGImage?
+
+    public init() {}
+}
+
 /// The game screen: a nearest-neighbour scaled framebuffer.
 ///
 /// Sizes itself to the available width at a 4:3 aspect rather than filling and
 /// letterboxing, so a caller can stack it against controls without the screen
 /// floating in dead space.
 public struct GameScreen: View {
-    public let image: CGImage?
+    @ObservedObject private var stream: FrameStream
 
-    public init(image: CGImage?) {
-        self.image = image
+    public init(stream: FrameStream) {
+        self.stream = stream
     }
 
     public var body: some View {
         Group {
-            if let image {
+            if let image = stream.image {
                 Image(decorative: image, scale: 1.0)
                     .interpolation(.none)     // never smooth pixel art
                     .antialiased(false)
@@ -118,7 +129,7 @@ public struct EmulatorView: View {
             // macOS and tvOS drive input from keyboard or a game controller, so the
             // screen gets the whole window. With no controls to tuck it beside,
             // the overlay has nowhere to go but on top of the picture.
-            GameScreen(image: host.frame)
+            GameScreen(stream: host.frames)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .overlay(alignment: .topLeading) {
                     if showDiagnostics { diagnostics() }
@@ -129,7 +140,7 @@ public struct EmulatorView: View {
     #if os(iOS)
         private func portrait(_ size: CGSize) -> some View {
             VStack(spacing: 0) {
-                GameScreen(image: host.frame)
+                GameScreen(stream: host.frames)
                     .frame(maxWidth: .infinity)
                 // Controls take all remaining height and scale into it, rather than
                 // sitting in a fixed strip with dead space above.
@@ -154,7 +165,7 @@ public struct EmulatorView: View {
             let controlWidth = max((size.width - screenWidth) / 2, 0)
 
             return ZStack {
-                GameScreen(image: host.frame)
+                GameScreen(stream: host.frames)
                     .frame(width: screenWidth, height: size.height)
 
                 TouchControls(
@@ -175,6 +186,22 @@ public struct EmulatorView: View {
         }
     #endif
 
+    private func diagnostics(compact: Bool = false) -> some View {
+        DiagnosticsOverlay(
+            stream: host.diagnostics, host: host, compact: compact)
+    }
+}
+
+/// The on-screen readout.
+///
+/// A separate view observing `DiagnosticsStream` rather than the host, so that
+/// counters updating at frame rate rebuild this and nothing else. Folded into
+/// `EmulatorView` it would have invalidated the controls along with itself.
+struct DiagnosticsOverlay: View {
+    @ObservedObject var stream: DiagnosticsStream
+    let host: EmulatorHost
+    var compact = false
+
     /// Pressed buttons as letters, or a dash when nothing is held.
     private static func padDescription(_ buttons: NESButton) -> String {
         let names: [(NESButton, String)] = [
@@ -188,9 +215,9 @@ public struct EmulatorView: View {
     /// - Parameter compact: drop the emulator internals and shrink the type,
     ///   for places too narrow for the full readout. The frame and input
     ///   timings survive in both forms — they are the reason this exists.
-    private func diagnostics(compact: Bool = false) -> some View {
+    var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(String(format: "%.0f fps", host.framesPerSecond))
+            Text(String(format: "%.0f fps", stream.framesPerSecond))
             // The frame budget, on screen. `gap` is the one that matters for
             // input latency: it is the spacing between ticks, so it counts
             // main-thread work this class never sees — SwiftUI re-evaluating
@@ -198,16 +225,21 @@ public struct EmulatorView: View {
             // the cost is outside the emulator, and no amount of making the
             // emulator faster will help.
             Text(String(format: "emu %.1f  img %.1f ms",
-                        host.profile.emulateMS, host.profile.renderMS))
+                        stream.profile.emulateMS, stream.profile.renderMS))
             Text(String(format: "gap %.1f  max %.0f ms",
-                        host.profile.gapMS, host.profile.worstGapMS))
-            Text("late \(host.profile.lateTicks)/120")
-                .foregroundStyle(host.profile.lateTicks > 6 ? .red : .green)
+                        stream.profile.gapMS, stream.profile.worstGapMS))
+            Text("late \(stream.profile.lateTicks)/120")
+                .foregroundStyle(stream.profile.lateTicks > 6 ? .red : .green)
             // Finger-to-code latency, measured from the event's own timestamp.
             // This is the number the whole input investigation turns on.
-            Text(String(format: "touch %.0f  max %.0f ms",
-                        host.inputLatency.lastMS, host.inputLatency.worstMS))
-                .foregroundStyle(host.inputLatency.worstMS > 100 ? .red : .green)
+            // The sample count is not decoration. Without it "touch 0 max 0"
+            // reads identically whether delivery is instant or whether the
+            // gesture never fired at all — opposite diagnoses.
+            Text(String(format: "touch %.0f max %.0f ms n%d",
+                        stream.inputLatency.lastMS,
+                        stream.inputLatency.worstMS,
+                        stream.inputLatency.samples))
+                .foregroundStyle(stream.inputLatency.worstMS > 100 ? .red : .green)
             if !compact {
                 Text("bank \(host.nes.mapper.currentPRGBank)")
                 Text(String(format: "PC $%04X", host.nes.cpu.pc))

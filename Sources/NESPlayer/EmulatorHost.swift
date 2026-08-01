@@ -24,44 +24,37 @@ public final class EmulatorHost: ObservableObject {
     /// Bundle resource name, used to namespace saves per game.
     public let gameName: String
 
-    @Published public private(set) var frame: CGImage?
-    @Published public private(set) var framesPerSecond: Double = 0
+    /// The picture, published on its own object.
+    ///
+    /// This is deliberately *not* `@Published` on the host. Anything observing
+    /// an `ObservableObject` is invalidated by any of its published properties,
+    /// so a frame arriving 60 times a second rebuilt the whole view tree 60
+    /// times a second — including every control and every `DragGesture`
+    /// attached to one. SwiftUI replaced the gesture recognisers faster than a
+    /// touch could be recognised, and presses were simply lost: the callout
+    /// pins never appeared, and the game was unplayable while the frame clock
+    /// reported a flawless 60 fps with no late ticks.
+    ///
+    /// Giving the image its own object confines that invalidation to the view
+    /// that draws it.
+    public let frames = FrameStream()
+
+    /// Most recent frame. Reading this does not subscribe the reader to
+    /// per-frame updates; observe `frames` for that.
+    public var frame: CGImage? { frames.image }
+
     @Published public var isPaused = false
 
-    /// Where a frame's time went, refreshed every 120 frames.
+    /// Frame timings and input latency, on their own object for the same
+    /// reason as `frames`.
     ///
-    /// Published as well as logged because pulling the unified log off a
-    /// physical device needs root, which makes the log useless in the exact
-    /// situation it was added for — someone holding the phone, reproducing the
-    /// bug. On screen the numbers are simply there.
-    public struct FrameProfile: Equatable {
-        public var emulateMS: Double = 0
-        public var renderMS: Double = 0
-        /// Mean spacing between ticks. Should sit at 16.67 ms.
-        public var gapMS: Double = 0
-        public var worstGapMS: Double = 0
-        /// Ticks in the last sample that missed a 60 Hz refresh.
-        public var lateTicks: Int = 0
-    }
+    /// `inputLatency` is the sharp case: it updates on *every* drag event, so
+    /// leaving it on the host would rebuild the control tree — and with it the
+    /// gesture recognisers — continuously while a finger is down. The
+    /// instrument would have caused the fault it was added to measure.
+    public let diagnostics = DiagnosticsStream()
 
-    @Published public private(set) var profile = FrameProfile()
-
-    /// How long a touch took to reach us.
-    ///
-    /// `DragGesture.Value.time` is the timestamp of the *event*, not of the
-    /// handler run. Subtracting it from now therefore measures everything
-    /// between the finger landing and this class being told: UIKit's delivery,
-    /// the run loop's availability, and SwiftUI's gesture recognition. That is
-    /// precisely the window "the button took half a second" lives in, and no
-    /// timer inside the frame loop can see it — which is why three rounds of
-    /// reasoning about the frame loop got nowhere.
-    public struct InputLatency: Equatable {
-        public var lastMS: Double = 0
-        public var worstMS: Double = 0
-        public var samples: Int = 0
-    }
-
-    @Published public private(set) var inputLatency = InputLatency()
+    public var framesPerSecond: Double { diagnostics.framesPerSecond }
 
     /// Records the delivery latency of one input event.
     public func noteInputEvent(at eventTime: Date) {
@@ -70,10 +63,11 @@ public final class EmulatorHost: ObservableObject {
         // that input took ten seconds; drop it instead of poisoning the worst
         // case, which is the number a diagnosis will hang on.
         guard ms >= 0, ms < 10000 else { return }
-        inputLatency = InputLatency(
+        let previous = diagnostics.inputLatency
+        diagnostics.inputLatency = InputLatency(
             lastMS: ms,
-            worstMS: max(inputLatency.worstMS, ms),
-            samples: inputLatency.samples + 1)
+            worstMS: max(previous.worstMS, ms),
+            samples: previous.samples + 1)
         if ms > 100 {
             Log.ui.notice("input delivered \(ms, format: .fixed(precision: 0), privacy: .public) ms late")
         }
@@ -81,7 +75,7 @@ public final class EmulatorHost: ObservableObject {
 
     /// Clears the worst-case reading so a fix can be judged on fresh numbers.
     public func resetInputLatency() {
-        inputLatency = InputLatency()
+        diagnostics.inputLatency = InputLatency()
     }
 
     /// Multiplies emulation speed; held down for fast-forward.
@@ -276,9 +270,13 @@ public final class EmulatorHost: ObservableObject {
             let gapMS = profileGap / n * 1000
             let worstMS = profileWorstGap * 1000
             let late = profileLateTicks
-            profile = FrameProfile(
-                emulateMS: emulateMS, renderMS: renderMS,
-                gapMS: gapMS, worstGapMS: worstMS, lateTicks: late)
+            var snapshot = FrameProfile()
+            snapshot.emulateMS = emulateMS
+            snapshot.renderMS = renderMS
+            snapshot.gapMS = gapMS
+            snapshot.worstGapMS = worstMS
+            snapshot.lateTicks = late
+            diagnostics.profile = snapshot
             Log.clock.notice("""
             perf: \(fps, format: .fixed(precision: 1), privacy: .public) fps  \
             emulate \(emulateMS, format: .fixed(precision: 2), privacy: .public) ms  \
@@ -299,7 +297,7 @@ public final class EmulatorHost: ObservableObject {
         let now = CFAbsoluteTimeGetCurrent()
         let elapsed = now - lastFPSSample
         if elapsed >= 0.5 {
-            framesPerSecond = Double(framesSinceSample) / elapsed
+            diagnostics.framesPerSecond = Double(framesSinceSample) / elapsed
             framesSinceSample = 0
             lastFPSSample = now
         }
@@ -323,7 +321,7 @@ public final class EmulatorHost: ObservableObject {
     }
 
     private func renderCurrentFrame() {
-        frame = FrameRenderer.image(from: nes.framebuffer)
+        frames.image = FrameRenderer.image(from: nes.framebuffer)
     }
 
     /// Total samples the APU has produced since launch. Diagnostic: if this is

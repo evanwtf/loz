@@ -1,0 +1,63 @@
+import Foundation
+
+/// Where a frame's time went, refreshed every 120 frames.
+///
+/// Published as well as logged because pulling the unified log off a physical
+/// device needs root, which makes the log useless in the exact situation it was
+/// added for — someone holding the phone, reproducing the bug. On screen the
+/// numbers are simply there.
+public struct FrameProfile: Equatable {
+    public var emulateMS: Double = 0
+    public var renderMS: Double = 0
+    /// Mean spacing between ticks. Should sit at 16.67 ms.
+    public var gapMS: Double = 0
+    public var worstGapMS: Double = 0
+    /// Ticks in the last sample that missed a 60 Hz refresh.
+    public var lateTicks: Int = 0
+
+    public init() {}
+}
+
+/// How long a touch took to reach the app.
+///
+/// `DragGesture.Value.time` is the timestamp of the *event*, not of the handler
+/// run. Subtracting it from now therefore measures everything between the
+/// finger landing and the handler running: UIKit's delivery, the run loop's
+/// availability, and SwiftUI's gesture recognition. That is precisely the
+/// window "the button took half a second" lives in, and no timer inside the
+/// frame loop can see it — which is why several rounds of reasoning about the
+/// frame loop got nowhere.
+///
+/// `samples` matters as much as the timings: without it, "0 ms" and "no event
+/// ever arrived" are indistinguishable, and those are opposite diagnoses.
+public struct InputLatency: Equatable {
+    public var lastMS: Double = 0
+    public var worstMS: Double = 0
+    public var samples: Int = 0
+
+    public init() {}
+
+    public init(lastMS: Double, worstMS: Double, samples: Int) {
+        self.lastMS = lastMS
+        self.worstMS = worstMS
+        self.samples = samples
+    }
+}
+
+/// Diagnostic counters, kept off the host so that watching them does not
+/// invalidate anything but the readout.
+///
+/// The separation is not tidiness. Anything observing an `ObservableObject` is
+/// rebuilt when any of its published properties changes, so counters that tick
+/// at frame rate — or, worse, at touch-event rate — drag every sibling view
+/// into a rebuild with them. That is what made the on-screen controls
+/// unresponsive: the gesture recognisers were being replaced faster than a
+/// touch could be recognised.
+@MainActor
+public final class DiagnosticsStream: ObservableObject {
+    @Published public internal(set) var framesPerSecond: Double = 0
+    @Published public internal(set) var profile = FrameProfile()
+    @Published public internal(set) var inputLatency = InputLatency()
+
+    public init() {}
+}
