@@ -190,6 +190,11 @@ Reference/     first-quest overworld map PNG for `nesrun mapcheck` — gitignore
   depend on `NESAnalysis` — the shipping binary must not contain a disassembler.
 - Never add an external dependency for `nesrun`'s CLI parsing — "no external
   dependencies while the core is in flux" (comment in `main.swift`).
+- Never let a self-hosted CI job run for a pull request from a fork. Every job
+  in `ci.yml` is guarded on the PR's head repository, because the runner is a
+  Mac on a desk rather than a disposable VM, and the ROM-staging step puts a
+  cartridge dump in the workspace. Removing that guard turns a fork PR into
+  arbitrary code execution with a copyrighted file next to it.
 - Never remove the `unsafeFlags` on `NESCore` in `Package.swift` (`-Ounchecked`
   in release, `-O` in **debug** too): at `-Onone` the interpreter runs ~15 fps
   and looks broken; optimised it holds 60.
