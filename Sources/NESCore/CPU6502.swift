@@ -118,6 +118,31 @@ public final class CPU6502 {
         return result
     }
 
+    /// `ROL` — shifts left *through* carry: the old carry becomes bit 0 and the
+    /// old bit 7 becomes the new carry.
+    ///
+    /// The distinction from `shiftLeft` is the whole point. A routine that
+    /// rotates a value several times is moving bits through the carry flag on
+    /// purpose, so treating a rotate as a shift loses a bit per step and
+    /// produces an answer that is close enough to look right.
+    public func rotateLeft(_ value: UInt8) -> UInt8 {
+        let carryIn: UInt8 = flag(Flag.carry) ? 1 : 0
+        setFlag(Flag.carry, value & 0x80 != 0)
+        let result = (value << 1) | carryIn
+        setZN(result)
+        return result
+    }
+
+    /// `ROR` — shifts right through carry: the old carry becomes bit 7 and the
+    /// old bit 0 becomes the new carry.
+    public func rotateRight(_ value: UInt8) -> UInt8 {
+        let carryIn: UInt8 = flag(Flag.carry) ? 0x80 : 0
+        setFlag(Flag.carry, value & 0x01 != 0)
+        let result = (value >> 1) | carryIn
+        setZN(result)
+        return result
+    }
+
     // MARK: Bus helpers
 
     @inline(__always) private func read(_ addr: UInt16) -> UInt8 { bus.cpuRead(addr) }

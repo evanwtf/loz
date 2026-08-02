@@ -78,9 +78,17 @@ struct RoutineEquivalenceTests {
         try verify(address: 0x9D42, name: "resetAudio")
     }
 
-    @Test("writeMapperRegister matches the 6502 original")
-    func writeMapperRegisterEquivalence() throws {
-        try verify(address: 0xBF98, name: "writeMapperRegister")
+    @Test("writeMapperControl matches the 6502 original")
+    func writeMapperControlEquivalence() throws {
+        try verify(address: 0xBF98, name: "writeMapperControl")
+    }
+
+    /// The bank-switch register. Of everything converted so far this is the one
+    /// with the least forgiving side effect — get it wrong and the wrong code
+    /// runs next, which does not look like a routine bug.
+    @Test("writeMapperPRGBank matches the 6502 original")
+    func writeMapperPRGBankEquivalence() throws {
+        try verify(address: 0xBFAC, name: "writeMapperPRGBank")
     }
 
     @Test("loadPulse1Registers matches the 6502 original")
@@ -96,6 +104,18 @@ struct RoutineEquivalenceTests {
     @Test("lookupSoundTableEntry matches the 6502 original")
     func lookupSoundTableEquivalence() throws {
         try verify(address: 0x9EE2, name: "lookupSoundTableEntry")
+    }
+
+    /// Rotates through carry and then falls through into the routine above, so
+    /// this covers both the rotate semantics and the fall-through.
+    @Test("lookupRotatedSoundTableEntry matches the 6502 original")
+    func lookupRotatedSoundTableEquivalence() throws {
+        try verify(address: 0x9EDC, name: "lookupRotatedSoundTableEntry")
+    }
+
+    @Test("loadNoiseDefaults matches the 6502 original")
+    func loadNoiseDefaultsEquivalence() throws {
+        try verify(address: 0x9F72, name: "loadNoiseDefaults")
     }
 
     /// The two pulse loaders write their register pair in opposite orders.

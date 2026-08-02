@@ -12,12 +12,16 @@ public enum ZeldaRoutines {
         var table = RoutineTable()
 
         table.register(
-            bank: 0, address: 0x9D42, name: "resetAudio", cycles: 20,
+            bank: 0, address: 0x9D42, name: "resetAudio", cycles: 22,
             body: resetAudio)
 
         table.register(
-            bank: 0, address: 0xBF98, name: "writeMapperRegister", cycles: 30,
-            body: writeMapperRegister)
+            bank: 0, address: 0xBF98, name: "writeMapperControl", cycles: 34,
+            body: writeMapperControl)
+
+        table.register(
+            bank: 0, address: 0xBFAC, name: "writeMapperPRGBank", cycles: 34,
+            body: writeMapperPRGBank)
 
         table.register(
             bank: 0, address: 0x9BFF, name: "loadPulse1Registers", cycles: 14,
@@ -28,8 +32,16 @@ public enum ZeldaRoutines {
             body: loadPulse2Registers)
 
         table.register(
-            bank: 0, address: 0x9EE2, name: "lookupSoundTableEntry", cycles: 19,
+            bank: 0, address: 0x9EE2, name: "lookupSoundTableEntry", cycles: 20,
             body: lookupSoundTableEntry)
+
+        table.register(
+            bank: 0, address: 0x9EDC, name: "lookupRotatedSoundTableEntry", cycles: 32,
+            body: lookupRotatedSoundTableEntry)
+
+        table.register(
+            bank: 0, address: 0x9F72, name: "loadNoiseDefaults", cycles: 16,
+            body: loadNoiseDefaults)
 
         return table
     }
@@ -119,7 +131,72 @@ public enum ZeldaRoutines {
         nes.cpuWrite(0x4015, 0x0F)
     }
 
-    // MARK: - writeMapperRegister  (bank 0, $BF98)
+    // MARK: - lookupRotatedSoundTableEntry  (bank 0, $9EDC)
+    //
+    //   AA        TAX            ; keep the original
+    //   6A        ROR A          ; seed carry from bit 0
+    //   8A        TXA            ; restore it, carry survives
+    //   2A        ROL A          ; rotate left three times *through* carry
+    //   2A        ROL A
+    //   2A        ROL A
+    //   ... then falls straight into lookupSoundTableEntry at $9EE2 ...
+    //
+    // The `ROR`/`TXA` pair is not a shift of the value: it is there purely to
+    // load carry with bit 0 and then throw the shifted result away, so that the
+    // three `ROL`s rotate rather than shift. Treating any of the four as a
+    // plain shift loses a bit per step and yields a table index that is wrong
+    // in a way that still looks like a plausible sound.
+    //
+    // Note this routine *falls through* into `$9EE2` rather than calling it,
+    // so the native version has to reproduce that tail as well. Both addresses
+    // are registered: the dispatcher keys on PC, so entering at either works.
+
+    static let lookupRotatedSoundTableEntry: @Sendable (NES) -> Void = { nes in
+        nes.cpu.x = nes.cpu.a
+        nes.cpu.setZeroNegative(nes.cpu.x)
+
+        // ROR A: the result is discarded by the TXA that follows, but the carry
+        // it leaves behind is the whole reason the instruction is here.
+        _ = nes.cpu.rotateRight(nes.cpu.a)
+
+        nes.cpu.a = nes.cpu.x
+        nes.cpu.setZeroNegative(nes.cpu.a)
+
+        for _ in 0..<3 {
+            nes.cpu.a = nes.cpu.rotateLeft(nes.cpu.a)
+        }
+
+        // Falls through into $9EE2.
+        lookupSoundTableEntry(nes)
+    }
+
+    // MARK: - loadNoiseDefaults  (bank 0, $9F72)
+    //
+    //   AD 19 06  LDA $0619      ; read, then immediately discarded
+    //   A9 20     LDA #$20
+    //   A2 82     LDX #$82
+    //   A0 7F     LDY #$7F
+    //   60        RTS
+    //
+    // Returns three constants in A, X and Y. The leading load is dead — its
+    // value and its flags are both overwritten by the `LDA #$20` on the next
+    // instruction — but it is reproduced anyway rather than optimised away.
+    // `$0619` is plain RAM here so the read has no side effect, but "this load
+    // looks pointless" is exactly the reasoning that turns a hardware register
+    // read into a silent behaviour change, and the rule is cheaper to keep than
+    // to make exceptions to.
+
+    static let loadNoiseDefaults: @Sendable (NES) -> Void = { nes in
+        _ = nes.cpuRead(0x0619)
+
+        nes.cpu.a = 0x20
+        nes.cpu.x = 0x82
+        nes.cpu.y = 0x7F
+        // Every load sets Z and N; the last one is what a caller sees.
+        nes.cpu.setZeroNegative(0x7F)
+    }
+
+    // MARK: - writeMapperControl  (bank 0, $BF98)
     //
     //   8D 00 80  STA $8000
     //   4A        LSR A
@@ -131,25 +208,43 @@ public enum ZeldaRoutines {
     // the value five times, shifting right between stores to present bits 0
     // through 4 in turn.
     //
-    // Note the address is always $8000 here; which of MMC1's four registers is
-    // written is decided by the address of the *fifth* store, so this helper
-    // only ever targets the control register.
+    // Which of MMC1's four registers is written is decided by the address, and
+    // this one always stores to $8000 — the control register.
 
-    static let writeMapperRegister: @Sendable (NES) -> Void = { nes in
-        var value = nes.cpu.a
+    static let writeMapperControl: @Sendable (NES) -> Void = { nes in
+        nes.cpu.a = serialWrite(nes, to: 0x8000, value: nes.cpu.a)
+    }
 
-        nes.cpuWrite(0x8000, value)
+    // MARK: - writeMapperPRGBank  (bank 0, $BFAC)
+    //
+    //   8D 00 E0  STA $E000
+    //   4A        LSR A
+    //   ... repeated, five stores and four shifts ...
+    //   60        RTS
+    //
+    // The same serial protocol as `writeMapperControl`, aimed at $E000 instead:
+    // on MMC1 the register is selected by which quarter of $8000-$FFFF the
+    // store lands in, and $E000 is the PRG bank register. So this is the
+    // routine that switches banks — which makes it the one whose side effect is
+    // least forgiving, since getting it wrong changes what code runs next.
+
+    static let writeMapperPRGBank: @Sendable (NES) -> Void = { nes in
+        nes.cpu.a = serialWrite(nes, to: 0xE000, value: nes.cpu.a)
+    }
+
+    /// MMC1's serial write: five stores of the same value, shifted right
+    /// between each, so the mapper latches bits 0 through 4 in turn.
+    ///
+    /// Shared because the two callers differ only in the address, and a copy
+    /// would be a place for the two to drift apart.
+    private static func serialWrite(_ nes: NES, to address: UInt16, value: UInt8) -> UInt8 {
+        var value = value
+        nes.cpuWrite(address, value)
 
         for _ in 0..<4 {
-            // LSR: carry takes bit 0, the result shifts right, N is always
-            // cleared because bit 7 becomes 0.
-            nes.cpu.setCarry(value & 0x01 != 0)
-            value >>= 1
-            nes.cpu.setZeroNegative(value)
-
-            nes.cpuWrite(0x8000, value)
+            value = nes.cpu.shiftRight(value)
+            nes.cpuWrite(address, value)
         }
-
-        nes.cpu.a = value
+        return value
     }
 }
