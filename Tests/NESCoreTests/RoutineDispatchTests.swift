@@ -46,9 +46,10 @@ struct RoutineDispatchTests {
     func nativeRoutineReplacesInterpretation() throws {
         let nes = try makeCallingProgram()
         nes.nativeRoutines.register(
-            bank: 0, address: 0x9000, name: "loadMagic", cycles: 4
+            bank: 0, address: 0x9000, name: "loadMagic"
         ) { machine in
             machine.cpu.a = 0x42         // deliberately different from the original
+            return 4
         }
 
         nes.step()                       // JSR
@@ -64,8 +65,8 @@ struct RoutineDispatchTests {
     func cyclesAreCharged() throws {
         let nes = try makeCallingProgram()
         nes.nativeRoutines.register(
-            bank: 0, address: 0x9000, name: "costly", cycles: 100
-        ) { _ in }
+            bank: 0, address: 0x9000, name: "costly"
+        ) { _ in 100 }
 
         nes.step()                       // JSR, 6 cycles
         let before = nes.cycles
@@ -81,7 +82,7 @@ struct RoutineDispatchTests {
             (offset: 0x0000, bytes: [0x20, 0x00, 0x90, 0x4C, 0x00, 0x80]),
             (offset: 0x1000, bytes: [0x60]),                     // bare RTS
         ])
-        nes.nativeRoutines.register(bank: 0, address: 0x9000, name: "spin", cycles: 6) { _ in }
+        nes.nativeRoutines.register(bank: 0, address: 0x9000, name: "spin") { _ in 6 }
 
         for _ in 0..<30 { nes.step() }
         let key = RoutineKey(bank: 0, address: 0x9000)
@@ -91,8 +92,8 @@ struct RoutineDispatchTests {
     @Test("Routines are keyed by bank, so the same address differs per bank")
     func routineKeysAreBankScoped() {
         var table = RoutineTable()
-        table.register(bank: 0, address: 0x8000, name: "bank0", cycles: 2) { _ in }
-        table.register(bank: 3, address: 0x8000, name: "bank3", cycles: 2) { _ in }
+        table.register(bank: 0, address: 0x8000, name: "bank0") { _ in 2 }
+        table.register(bank: 3, address: 0x8000, name: "bank3") { _ in 2 }
 
         #expect(table.count == 2)
         #expect(table[RoutineKey(bank: 0, address: 0x8000)]?.name == "bank0")

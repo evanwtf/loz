@@ -140,6 +140,7 @@ useful for confirming something is on the hot path before optimising it.
 | `00:9EE2 lookupSoundTableEntry` | Masked index plus table base |
 | `00:9EDC lookupRotatedSoundTableEntry` | Rotates through carry, then falls through into the above |
 | `00:9F72 loadNoiseDefaults` | Three constants, and one deliberately dead load |
+| `00:9C09 loadPulse1Frequency` | Table-driven period write, with an early exit — the first branching conversion |
 
 All verified across 48 randomised entry states, and observed executing during
 real gameplay via `nesrun play --native`.

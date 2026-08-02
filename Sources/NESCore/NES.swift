@@ -100,11 +100,11 @@ public final class NES {
         let key = RoutineKey(bank: mapper.currentPRGBank, address: cpu.pc)
         guard let routine = nativeRoutines[key] else { return nil }
 
-        routine.body(self)
+        let cycles = routine.body(self)
         cpu.returnFromSubroutine()
-        cpu.advanceCycles(routine.cycles)
+        cpu.advanceCycles(cycles)
         nativeCallCounts[key, default: 0] += 1
-        return routine.cycles
+        return cycles
     }
 
     /// Runs until the PPU signals the end of a frame.
