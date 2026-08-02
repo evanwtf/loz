@@ -1,6 +1,6 @@
 # Testing
 
-232 tests across 24 suites, using swift-testing. `swift test` runs in ~10s —
+236 tests across 25 suites, using swift-testing. `swift test` runs in ~10s —
 most of which is the four `Host input path` and seven `Auto-resume` tests
 sharing a ten-second budget — so there is no excuse for not running it.
 
@@ -17,7 +17,7 @@ timing.
 
 ## Suites
 
-Twenty-four suites across twenty files — `APUTests.swift` declares three.
+Twenty-five suites across twenty-one files — `APUTests.swift` declares three.
 
 ### `NESCoreTests` — the emulator (150)
 
@@ -51,13 +51,28 @@ looks trivial and is not: status bar sprites became phantom targets, and a
 dropped key classified as an enemy cost 552 sword swings against an item that
 only had to be walked onto.
 
-### `NESPlayerTests` — the app shell (24)
+### `NESPlayerTests` — the app shell (28)
 
 | Suite | Tests | Guards |
 |---|---|---|
 | `On-screen control layout` | 13 | Controls fit the screen in **both** orientations; d-pad hit regions |
 | `Auto-resume` | 7 | Snapshots round-trip; foreign and corrupt ones are refused |
 | `Host input path` | 4 | A button pressed through `EmulatorHost` reaches the game |
+| `Silent when headless` | 4 | A host nobody started never opens the audio device |
+
+`Silent when headless` is a regression guard with an audible failure mode. Until
+it existed, running `swift test` played Zelda through the speakers — eleven
+`EmulatorHost` instances, twelve audio-engine starts — and so did `zeldamac
+--selftest`. The cause is a Swift subtlety worth knowing: `isMuted` is
+`@Published`, so assigning it in `init` goes through the property wrapper's
+setter and its `didSet` **does** fire during initialisation, where a plain
+stored property's would not. The observer started the engine on any unmuted
+assignment, so merely constructing a host opened the audio device.
+
+Audio now follows the *run state* rather than the mute flag alone: nothing that
+never calls `start()` can make a sound, which needs no test-runner detection.
+The APU still runs and still produces samples — `--selftest` continues to check
+that it generated 99.8% of the expected count — only the speaker is gated.
 
 `Host input path` exists because every layer below it can be correct while the
 app is still unplayable. It drives the committed boot script through the host

@@ -140,7 +140,7 @@ public final class EmulatorHost: ObservableObject {
     /// Muting stops audio reaching the speaker but keeps the APU running, so
     /// unmuting resumes mid-phrase rather than restarting a note.
     @Published public var isMuted = false {
-        didSet { isMuted ? audio.stop() : audio.start() }
+        didSet { syncAudioToRunState() }
     }
 
     private let saveURL: URL?
@@ -244,7 +244,7 @@ public final class EmulatorHost: ObservableObject {
         let clock = FrameClock { [weak self] in self?.tick() }
         clock.start()
         self.clock = clock
-        if !isMuted { audio.start() }
+        syncAudioToRunState()
         // Values are hoisted into locals before every log call in this type.
         // A Logger message is an autoclosure, so referring to a property
         // directly needs an explicit `self.` — which the formatter's
@@ -257,10 +257,41 @@ public final class EmulatorHost: ObservableObject {
     public func stop() {
         clock?.stop()
         clock = nil
-        audio.stop()
+        syncAudioToRunState()
         persistForBackgrounding()
         Log.host.notice("stopped")
     }
+
+    /// Opens or closes the audio device to match whether the host is actually
+    /// running and unmuted.
+    ///
+    /// Audio follows the *run state*, not the mute flag on its own. That
+    /// distinction is the whole point: a host that has never been started must
+    /// never reach the speaker, and before this it always did.
+    ///
+    /// `isMuted` is `@Published`, so assigning it in `init` goes through the
+    /// property wrapper's setter rather than initialising storage directly —
+    /// which means `didSet` *fires during initialisation*, unlike a plain
+    /// stored property. The old observer started the engine on any unmuted
+    /// assignment, so simply constructing an `EmulatorHost` opened the audio
+    /// device. Every `swift test` run played Zelda out loud (twelve engine
+    /// starts across the eleven hosts the suite builds), and so did
+    /// `zeldamac --selftest`, neither of which has a window or a listener.
+    ///
+    /// Gating on `clock` rather than on a "headless" flag avoids having to
+    /// detect the test runner: nothing that never calls `start()` can make a
+    /// sound, by construction.
+    private func syncAudioToRunState() {
+        if clock != nil, !isMuted {
+            audio.start()
+        } else {
+            audio.stop()
+        }
+    }
+
+    /// Whether the audio device is currently open. Exposed so a test can assert
+    /// that a host which was never started stays silent.
+    public var isAudioRunning: Bool { audio.isRunning }
 
     // MARK: Frame loop
 
