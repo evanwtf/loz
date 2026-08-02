@@ -1,6 +1,6 @@
 # Testing
 
-236 tests across 25 suites, using swift-testing. `swift test` runs in ~10s —
+245 tests across 26 suites, using swift-testing. `swift test` runs in ~10s —
 most of which is the four `Host input path` and seven `Auto-resume` tests
 sharing a ten-second budget — so there is no excuse for not running it.
 
@@ -17,9 +17,9 @@ timing.
 
 ## Suites
 
-Twenty-five suites across twenty-one files — `APUTests.swift` declares three.
+Twenty-six suites across twenty-two files — `APUTests.swift` declares three.
 
-### `NESCoreTests` — the emulator (150)
+### `NESCoreTests` — the emulator (156)
 
 | Suite | Tests | Guards |
 |---|---|---|
@@ -36,6 +36,7 @@ Twenty-five suites across twenty-one files — `APUTests.swift` declares three.
 | `Save states` | 6 | Round-trip fidelity; restored machines stay in lockstep |
 | `Native routine dispatch` | 6 | Native dispatch replaces interpretation transparently |
 | `Nametable reading` | 7 | Tile reads honour mirroring; the active table follows control |
+| `CPU: shift and rotate helpers` | 6 | The helpers routines are built from agree with the interpreter |
 
 ### `NESAnalysisTests` — the dev-only tooling (29)
 
@@ -83,16 +84,16 @@ actually shipped were in touch delivery and view invalidation, and were caught
 by on-screen instrumentation rather than by this suite. See
 [ios-app.md](ios-app.md#writing-a-diagnostic-that-can-be-trusted).
 
-### `ZeldaGameTests` — the decompilation (30)
+### `ZeldaGameTests` — the decompilation (33)
 
 | Suite | Tests | Guards |
 |---|---|---|
-| `Decompiled routine equivalence` | 7 | Each native routine matches the 6502 original, writes in order |
+| `Decompiled routine equivalence` | 10 | Each native routine matches the 6502 original, writes in order |
 | `Zelda enemy slots` | 9 | Which object slots hold killable enemies, and which do not |
 | `Zelda playfield` | 11 | Grid geometry against measured positions; the doorway rule |
 | `Zelda symbol map` | 3 | Every recovered symbol is present under its measured address |
 
-These seven are the only tests that need `zelda.nes`. They skip cleanly when it
+These ten are the only tests that need `zelda.nes`. They skip cleanly when it
 is absent, which is why CI passes on a clean checkout.
 
 ## Two bugs the tests caught

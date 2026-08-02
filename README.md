@@ -25,9 +25,9 @@ dungeon — with sound.
 | macOS app | Running (`swift run zeldamac`) |
 | tvOS app | Written, **unverified** — tvOS SDK not installed |
 | Agent harness | Scripted input, PNG capture, snapshots, pathfinding, tracing |
-| Decompilation | 5 routines native and verified; the loop is proven |
+| Decompilation | 8 routines native and verified; the loop is proven |
 
-236 tests across 25 suites. CI green on a self-hosted macOS runner.
+245 tests across 26 suites. CI green on a self-hosted macOS runner.
 
 ## You must supply the ROM
 

@@ -133,10 +133,13 @@ useful for confirming something is on the hot path before optimising it.
 | Routine | What it does |
 |---|---|
 | `00:9D42 resetAudio` | Order-sensitive `$4015` writes: silence all, then re-enable |
-| `00:BF98 writeMapperRegister` | MMC1 serial 5-bit register protocol |
+| `00:BF98 writeMapperControl` | MMC1 serial 5-bit protocol, aimed at the control register |
+| `00:BFAC writeMapperPRGBank` | The same protocol aimed at `$E000` — the bank switch |
 | `00:9BFF loadPulse1Registers` | Sweep then control |
 | `00:9C1D loadPulse2Registers` | Control then sweep |
 | `00:9EE2 lookupSoundTableEntry` | Masked index plus table base |
+| `00:9EDC lookupRotatedSoundTableEntry` | Rotates through carry, then falls through into the above |
+| `00:9F72 loadNoiseDefaults` | Three constants, and one deliberately dead load |
 
 All verified across 48 randomised entry states, and observed executing during
 real gameplay via `nesrun play --native`.
