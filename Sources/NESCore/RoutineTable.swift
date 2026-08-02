@@ -21,23 +21,30 @@ public struct NativeRoutine: Sendable {
     /// Human-readable name recovered during reverse engineering.
     public let name: String
 
-    /// Runs the routine against live machine state. Implementations read and
-    /// write CPU registers and memory exactly as the 6502 original did, so the
-    /// caller cannot tell the difference.
+    /// Runs the routine against live machine state and returns the cycles the
+    /// 6502 original would have taken. Implementations read and write CPU
+    /// registers and memory exactly as it did, so the caller cannot tell the
+    /// difference.
+    ///
+    /// **The count is returned rather than declared alongside the body.** A
+    /// routine with a branch does not have one cost — `00:9C09` takes 31 cycles
+    /// when its table entry is non-zero and 15 when it is zero — so a single
+    /// number attached to the registration is wrong about half the time, and
+    /// there is nowhere honest to put it. Returning it also removes the gap
+    /// between what a table says and what the code does, which is where three
+    /// wrong declarations had been sitting unnoticed.
+    ///
+    /// Timing matters even once logic is native, because the PPU is clocked
+    /// from the CPU's cycle count — a routine that returned "instantly" would
+    /// desynchronise the picture.
     ///
     /// `@Sendable` because routine tables are declared as static game data;
     /// implementations must be pure functions of the machine they are handed
     /// and must not capture external mutable state.
-    public let body: @Sendable (NES) -> Void
+    public let body: @Sendable (NES) -> Int
 
-    /// Cycles the original consumed. Timing still matters even once logic is
-    /// native, because the PPU is clocked from the CPU's cycle count — a
-    /// routine that returns "instantly" would desynchronise the picture.
-    public let cycles: Int
-
-    public init(name: String, cycles: Int, body: @escaping @Sendable (NES) -> Void) {
+    public init(name: String, body: @escaping @Sendable (NES) -> Int) {
         self.name = name
-        self.cycles = cycles
         self.body = body
     }
 }
@@ -62,11 +69,10 @@ public struct RoutineTable: Sendable {
         bank: Int,
         address: UInt16,
         name: String,
-        cycles: Int,
-        body: @escaping @Sendable (NES) -> Void
+        body: @escaping @Sendable (NES) -> Int
     ) {
         routines[RoutineKey(bank: bank, address: address)] =
-            NativeRoutine(name: name, cycles: cycles, body: body)
+            NativeRoutine(name: name, body: body)
     }
 
     public var isEmpty: Bool { routines.isEmpty }

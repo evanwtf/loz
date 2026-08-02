@@ -12,36 +12,40 @@ public enum ZeldaRoutines {
         var table = RoutineTable()
 
         table.register(
-            bank: 0, address: 0x9D42, name: "resetAudio", cycles: 22,
+            bank: 0, address: 0x9D42, name: "resetAudio",
             body: resetAudio)
 
         table.register(
-            bank: 0, address: 0xBF98, name: "writeMapperControl", cycles: 34,
+            bank: 0, address: 0xBF98, name: "writeMapperControl",
             body: writeMapperControl)
 
         table.register(
-            bank: 0, address: 0xBFAC, name: "writeMapperPRGBank", cycles: 34,
+            bank: 0, address: 0xBFAC, name: "writeMapperPRGBank",
             body: writeMapperPRGBank)
 
         table.register(
-            bank: 0, address: 0x9BFF, name: "loadPulse1Registers", cycles: 14,
+            bank: 0, address: 0x9BFF, name: "loadPulse1Registers",
             body: loadPulse1Registers)
 
         table.register(
-            bank: 0, address: 0x9C1D, name: "loadPulse2Registers", cycles: 14,
+            bank: 0, address: 0x9C1D, name: "loadPulse2Registers",
             body: loadPulse2Registers)
 
         table.register(
-            bank: 0, address: 0x9EE2, name: "lookupSoundTableEntry", cycles: 20,
+            bank: 0, address: 0x9EE2, name: "lookupSoundTableEntry",
             body: lookupSoundTableEntry)
 
         table.register(
-            bank: 0, address: 0x9EDC, name: "lookupRotatedSoundTableEntry", cycles: 32,
+            bank: 0, address: 0x9EDC, name: "lookupRotatedSoundTableEntry",
             body: lookupRotatedSoundTableEntry)
 
         table.register(
-            bank: 0, address: 0x9F72, name: "loadNoiseDefaults", cycles: 16,
+            bank: 0, address: 0x9F72, name: "loadNoiseDefaults",
             body: loadNoiseDefaults)
+
+        table.register(
+            bank: 0, address: 0x9C09, name: "loadPulse1Frequency",
+            body: loadPulse1Frequency)
 
         return table
     }
@@ -59,9 +63,12 @@ public enum ZeldaRoutines {
     // sweep unit reloads off a write to the control register, so swapping the
     // two changes when the sweep divider resets.
 
-    static let loadPulse1Registers: @Sendable (NES) -> Void = { nes in
+    static let loadPulse1Registers: @Sendable (NES) -> Int = { nes in
         nes.cpuWrite(0x4001, nes.cpu.y)
         nes.cpuWrite(0x4000, nes.cpu.x)
+
+        // STY abs 4 + STX abs 4 + RTS 6.
+        return 14
     }
 
     // MARK: - loadPulse2Registers  (bank 0, $9C1D)
@@ -70,9 +77,71 @@ public enum ZeldaRoutines {
     //   8C 05 40  STY $4005      ; then sweep
     //   60        RTS
 
-    static let loadPulse2Registers: @Sendable (NES) -> Void = { nes in
+    static let loadPulse2Registers: @Sendable (NES) -> Int = { nes in
         nes.cpuWrite(0x4004, nes.cpu.x)
         nes.cpuWrite(0x4005, nes.cpu.y)
+
+        // STX abs 4 + STY abs 4 + RTS 6.
+        return 14
+    }
+
+    // MARK: - loadPulse1Frequency  (bank 0, $9C09)
+    //
+    //   A8        TAY            ; 2
+    //   B9 01 9F  LDA $9F01,Y    ; 4, +1 across a page
+    //   F0 0D     BEQ $9C1C      ; 2, +1 when taken
+    //   85 6A     STA $6A        ; 3   zero page
+    //   8D 02 40  STA $4002      ; 4   period low
+    //   B9 00 9F  LDA $9F00,Y    ; 4
+    //   09 08     ORA #$08       ; 2
+    //   8D 03 40  STA $4003      ; 4   period high + length reload
+    //   60        RTS            ; 6
+    //
+    // The first routine here with a branch, and the reason `body` returns a
+    // cycle count instead of declaring one: a zero table entry means "no note",
+    // and the early exit costs 15 cycles against 31 for the full path. Any
+    // single declared number would be wrong about half the time, and the PPU is
+    // clocked from this.
+    //
+    // The page-cross penalty is real rather than pedantic. `$9F01,Y` crosses
+    // into $A0xx when Y is $FF, which costs an extra cycle — and Y is caller
+    // supplied, so it happens.
+
+    static let loadPulse1Frequency: @Sendable (NES) -> Int = { nes in
+        nes.cpu.y = nes.cpu.a
+        nes.cpu.setZeroNegative(nes.cpu.y)
+
+        let index = UInt16(nes.cpu.y)
+        let lowAddress = 0x9F01 &+ index
+        // A page cross costs a cycle on an indexed absolute read.
+        var cycles = 2 + 4 + (lowAddress & 0xFF00 != 0x9F00 ? 1 : 0)
+
+        let low = nes.cpuRead(lowAddress)
+        nes.cpu.a = low
+        nes.cpu.setZeroNegative(low)
+
+        if low == 0 {
+            // BEQ taken: 3 cycles, then the RTS.
+            return cycles + 3 + 6
+        }
+        cycles += 2   // BEQ not taken
+
+        nes.cpuWrite(0x006A, low)
+        nes.cpuWrite(0x4002, low)
+        cycles += 3 + 4
+
+        let high = nes.cpuRead(0x9F00 &+ index)
+        nes.cpu.a = high
+        nes.cpu.setZeroNegative(high)
+        cycles += 4
+
+        let value = high | 0x08
+        nes.cpu.a = value
+        nes.cpu.setZeroNegative(value)
+        cycles += 2
+
+        nes.cpuWrite(0x4003, value)
+        return cycles + 4 + 6
     }
 
     // MARK: - lookupSoundTableEntry  (bank 0, $9EE2)
@@ -88,7 +157,7 @@ public enum ZeldaRoutines {
     // is a real add-with-carry — CLC first means carry-in is zero, but it still
     // sets C and V on overflow, and a caller may branch on them.
 
-    static let lookupSoundTableEntry: @Sendable (NES) -> Void = { nes in
+    static let lookupSoundTableEntry: @Sendable (NES) -> Int = { nes in
         let masked = nes.cpu.a & 0x07
         nes.cpu.a = masked
         nes.cpu.setZeroNegative(masked)
@@ -102,6 +171,9 @@ public enum ZeldaRoutines {
         let entry = nes.cpuRead(0x9FD1 &+ UInt16(nes.cpu.y))
         nes.cpu.a = entry
         nes.cpu.setZeroNegative(entry)
+
+        // AND# 2 + CLC 2 + ADC abs 4 + TAY 2 + LDA abs,Y 4 + RTS 6.
+        return 20
     }
 
     // MARK: - resetAudio  (bank 0, $9D42)
@@ -118,7 +190,7 @@ public enum ZeldaRoutines {
     // leave the channels genuinely silent rather than mid-note. Collapsing it
     // to a single write to $4015 would look equivalent and sound wrong.
 
-    static let resetAudio: @Sendable (NES) -> Void = { nes in
+    static let resetAudio: @Sendable (NES) -> Int = { nes in
         nes.cpu.a = 0x00
         nes.cpu.setZeroNegative(0x00)
 
@@ -129,6 +201,9 @@ public enum ZeldaRoutines {
         nes.cpu.setZeroNegative(0x0F)
 
         nes.cpuWrite(0x4015, 0x0F)
+
+        // LDA# 2 + two STA abs 8 + LDA# 2 + STA abs 4 + RTS 6.
+        return 22
     }
 
     // MARK: - lookupRotatedSoundTableEntry  (bank 0, $9EDC)
@@ -151,7 +226,7 @@ public enum ZeldaRoutines {
     // so the native version has to reproduce that tail as well. Both addresses
     // are registered: the dispatcher keys on PC, so entering at either works.
 
-    static let lookupRotatedSoundTableEntry: @Sendable (NES) -> Void = { nes in
+    static let lookupRotatedSoundTableEntry: @Sendable (NES) -> Int = { nes in
         nes.cpu.x = nes.cpu.a
         nes.cpu.setZeroNegative(nes.cpu.x)
 
@@ -166,8 +241,9 @@ public enum ZeldaRoutines {
             nes.cpu.a = nes.cpu.rotateLeft(nes.cpu.a)
         }
 
-        // Falls through into $9EE2.
-        lookupSoundTableEntry(nes)
+        // Falls through into $9EE2, and inherits its cost.
+        // TAX 2 + ROR A 2 + TXA 2 + three ROL A 6, then the tail.
+        return 12 + lookupSoundTableEntry(nes)
     }
 
     // MARK: - loadNoiseDefaults  (bank 0, $9F72)
@@ -186,7 +262,7 @@ public enum ZeldaRoutines {
     // read into a silent behaviour change, and the rule is cheaper to keep than
     // to make exceptions to.
 
-    static let loadNoiseDefaults: @Sendable (NES) -> Void = { nes in
+    static let loadNoiseDefaults: @Sendable (NES) -> Int = { nes in
         _ = nes.cpuRead(0x0619)
 
         nes.cpu.a = 0x20
@@ -194,6 +270,9 @@ public enum ZeldaRoutines {
         nes.cpu.y = 0x7F
         // Every load sets Z and N; the last one is what a caller sees.
         nes.cpu.setZeroNegative(0x7F)
+
+        // LDA abs 4 + LDA# 2 + LDX# 2 + LDY# 2 + RTS 6.
+        return 16
     }
 
     // MARK: - writeMapperControl  (bank 0, $BF98)
@@ -211,8 +290,9 @@ public enum ZeldaRoutines {
     // Which of MMC1's four registers is written is decided by the address, and
     // this one always stores to $8000 — the control register.
 
-    static let writeMapperControl: @Sendable (NES) -> Void = { nes in
+    static let writeMapperControl: @Sendable (NES) -> Int = { nes in
         nes.cpu.a = serialWrite(nes, to: 0x8000, value: nes.cpu.a)
+        return serialWriteCycles
     }
 
     // MARK: - writeMapperPRGBank  (bank 0, $BFAC)
@@ -228,9 +308,13 @@ public enum ZeldaRoutines {
     // routine that switches banks — which makes it the one whose side effect is
     // least forgiving, since getting it wrong changes what code runs next.
 
-    static let writeMapperPRGBank: @Sendable (NES) -> Void = { nes in
+    static let writeMapperPRGBank: @Sendable (NES) -> Int = { nes in
         nes.cpu.a = serialWrite(nes, to: 0xE000, value: nes.cpu.a)
+        return serialWriteCycles
     }
+
+    /// Five STA abs at 4 each, four LSR A at 2 each, and the RTS.
+    private static let serialWriteCycles = 5 * 4 + 4 * 2 + 6
 
     /// MMC1's serial write: five stores of the same value, shifted right
     /// between each, so the mapper latches bits 0 through 4 in turn.

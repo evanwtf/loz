@@ -147,11 +147,13 @@ public enum RoutineVerifier {
         }
 
         nes.cpu.enterSubroutine(at: 0xFFFF, returningTo: sentinel)
-        routine.body(nes)
+        // The routine reports what it cost; that number is what the dispatcher
+        // charges the CPU, so it is the one worth comparing.
+        let reportedCycles = routine.body(nes)
         nes.cpu.returnFromSubroutine()
 
         outcome.completed = nes.cpu.pc == sentinel
-        outcome.cycles = routine.cycles
+        outcome.cycles = reportedCycles
 
         nes.onMemoryWrite = nil
         capture(&outcome, from: nes, writes: writes)
