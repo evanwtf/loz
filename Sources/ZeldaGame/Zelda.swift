@@ -34,6 +34,16 @@ public enum Zelda: GameDefinition {
         // number instead; Level 1's entrance room is $73.
         0x00EB: "currentScreen",
 
+        // Enemy slots: one byte of type per slot, zero when the slot is empty.
+        // Found by clearing a room and looking for a contiguous run that went
+        // non-zero to zero, then confirmed across two rooms — three Keese in
+        // $72 read `1B 1B 1B`, three Stalfos in $63 read `2A 2A 2A`.
+        //
+        // This is a better room-clear signal than counting sprites. OAM showed
+        // only two of the three Stalfos, because the third had not been drawn
+        // yet; the table had all three the whole time.
+        0x0350: "enemyTypes",
+
         // Inventory. Both confirmed with `nesrun ramdiff` against a control run
         // of the same length in which the item was *not* picked up — see
         // docs/agent-harness.md. The sword is 0 = none, 1 = wooden,

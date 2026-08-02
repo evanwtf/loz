@@ -267,6 +267,28 @@ Thirteen lines instead of a hundred and seventy-seven, and `[0->1]` flags the
 shape most searches are looking for — a flag going from "don't have it" to
 "have it". `$0657` is the sword, and it is now in `Zelda.symbols`.
 
+### Finding an array rather than a byte
+
+A control run is the wrong instrument when the thing you are looking for is a
+*slot table*. Enemies move constantly, so anything holding their state also
+changes in the control and gets subtracted away — the useful signal is
+suppressed along with the noise.
+
+Look for structure instead. Snapshot a room with enemies alive, clear it, and
+search for a contiguous run that went non-zero to zero:
+
+```
+$0350-$0352  (3)  alive ['1B', '1B', '1B']
+```
+
+Three enemies, three bytes, one value each. Confirmed by repeating it in a
+different room: three Stalfos in `$63` read `2A 2A 2A`, so the value is the
+enemy *type* and the index is the slot. That is `enemyTypes` in `Zelda.symbols`.
+
+Worth noting what this beats: `oam` reported only two of those three Stalfos,
+because the third had not been drawn yet. Sprite counting undercounts a room;
+the slot table does not.
+
 Two things worth knowing before trusting a result:
 
 - **A poor control is worse than none.** Combat is nondeterministic, so
