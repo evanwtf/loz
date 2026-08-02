@@ -31,6 +31,11 @@
 
 ## Reference material
 
-`Reference/overworld-first-quest.png` — complete First Quest overworld map by
-Rick N. Bruns (NESMaps.com). Geometry and how to use it programmatically are
-documented in [agent-harness.md](agent-harness.md#overworld-reference-map).
+`nesrun mapcheck` scores a rendered screen against a complete First Quest
+overworld map. **That map is not in the repository** — it is assembled from the
+game's own graphics and carries Nintendo's copyright notice in the image, so it
+is supplied locally like the ROM is. `Reference/*.png` is gitignored.
+
+The one used here is by Rick N. Bruns (NESMaps.com). Any map of the same
+geometry works; the dimensions `mapcheck` expects are in
+[agent-harness.md](agent-harness.md#overworld-reference-map).

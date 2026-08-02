@@ -39,7 +39,7 @@ Sources/
   nesrun/      CLI harness
   zeldamac/    macOS app, runs straight from SwiftPM
 Apps/          iOS and tvOS app targets
-Reference/     Overworld map (Rick N. Bruns, NESMaps.com)
+Reference/     Overworld map for `mapcheck` — supplied locally, not committed
 docs/          Architecture, internals, harness guide
 ```
 
@@ -79,10 +79,20 @@ The retail Zelda cartridge (SNROM board):
 
 ## ROMs
 
-No ROM is included or committed; `.nes` files and `.state` snapshots are
-gitignored. Supply your own dump of a cartridge you own. Each `GameDefinition`
-pins an expected SHA-256, so a different dump fails loudly rather than
-producing subtle nonsense.
+No ROM is included or committed; `.nes` files, `.state` snapshots, and the
+overworld reference map are all gitignored. Supply your own dump of a cartridge
+you own. Each `GameDefinition` pins an expected SHA-256, so a different dump
+fails loudly rather than producing subtle nonsense.
+
+## License
+
+[0BSD](LICENSE) — do what you like, attribution not required.
+
+That covers the emulator, the player shell, the analysis tools, and the
+harness. It does not cover what is derived from Nintendo's work and is not mine
+to license: the app icon, and the converted routines and symbol map in
+`Sources/ZeldaGame/`. See [LICENSE](LICENSE) for the exact scope. Not
+affiliated with or endorsed by Nintendo.
 
 ## Approach
 

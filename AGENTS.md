@@ -102,7 +102,8 @@ Tests/         NESCoreTests, NESPlayerTests, ZeldaGameTests
 docs/          architecture, decompilation, agent-harness, testing, adding-a-game,
                rom-format, rom-free, emulator-{cpu,ppu,apu,mappers},
                {ios,macos}-app, distribution; README.md is the index
-Reference/     first-quest overworld map PNG, used by `nesrun mapcheck`
+Reference/     first-quest overworld map PNG for `nesrun mapcheck` — gitignored
+               and supplied locally; it is built from ripped game graphics
 ```
 
 ## Code Style & Patterns
@@ -155,16 +156,23 @@ Reference/     first-quest overworld map PNG, used by `nesrun mapcheck`
 - Run `swift build && swift test` and `swiftformat Sources Tests --lint
   --cache ignore` before considering work done — both are CI gates, and the
   suite needs no ROM.
-- Keep all cartridge data out of git: `.nes`, `.sav`, `.srm`, `.state`, and
-  `Sources/*/ROMData.swift` + `Sources/*/ZeldaROMData.swift` are gitignored
-  because they *are* the copyrighted game. Snapshots embed CHR-RAM; regenerate
-  them with the committed script `docs/scripts/boot-to-overworld.txt` instead
-  of committing them.
+- Keep all cartridge data out of git: `.nes`, `.sav`, `.srm`, `.state`,
+  `Reference/*.png`, and `Sources/*/ROMData.swift` + `Sources/*/ZeldaROMData.swift`
+  are gitignored because they *are* the copyrighted game. Snapshots embed
+  CHR-RAM; regenerate them with the committed script
+  `docs/scripts/boot-to-overworld.txt` instead of committing them. The
+  overworld map is ripped graphics with Nintendo's copyright notice rendered
+  into the image — it was committed once and had to be purged from history.
 
 ### Never
 
-- Never commit a ROM, a snapshot, or the generated `ZeldaROMData.swift` — that
-  puts back exactly what was deliberately kept out of the repository.
+- Never commit a ROM, a snapshot, the generated `ZeldaROMData.swift`, or a
+  reference map — that puts back exactly what was deliberately kept out of the
+  repository.
+- Never add game artwork, sprites, tiles, or maps. `LICENSE` states what this
+  repository does and does not cover; anything Nintendo-derived that lands here
+  makes that statement false. The two exceptions are named explicitly in
+  `LICENSE` and are not a precedent for more.
 - Never make a shipping target (`NESCore`, `NESPlayer`, `ZeldaGame`, the apps)
   depend on `NESAnalysis` — the shipping binary must not contain a disassembler.
 - Never add an external dependency for `nesrun`'s CLI parsing — "no external

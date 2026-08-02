@@ -27,6 +27,11 @@ Captures/
 # Emulator snapshots embed CHR-RAM (game data); regenerate from docs/scripts/
 *.state
 
+# The overworld reference map used by `nesrun mapcheck` is assembled from the
+# game's own graphics and carries Nintendo's copyright notice in the image
+# itself, so it is supplied locally rather than committed.
+Reference/*.png
+
 # Generated ROM data: holds the same bytes as the cartridge, so it stays
 # out of the repository for the same reason the .nes does. Regenerate with
 # `swift run nesrun embed zelda.nes`.

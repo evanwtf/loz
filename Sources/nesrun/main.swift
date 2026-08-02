@@ -480,8 +480,20 @@ case "mapcheck":
     guard let result = MapCheck.score(
         framebuffer: nes.framebuffer, screen: screen, mapPath: mapPath)
     else {
-        FileHandle.standardError.write(
-            "error: could not read \(mapPath) or screen out of range\n".data(using: .utf8)!)
+        // The reference map is not in the repository: it is assembled from the
+        // game's own graphics and carries Nintendo's copyright notice in the
+        // image itself. Say so, rather than leaving a bare "could not read".
+        FileHandle.standardError.write("""
+        error: could not read \(mapPath), or screen $\(String(format: "%02X", screen)) \
+        is out of range.
+        
+        The reference map is not committed — it is built from ripped game
+        graphics. Supply your own and pass it with --map, or drop it at
+        Reference/overworld-first-quest.png (gitignored). It must be the
+        4352x1408 First Quest overworld; see docs/agent-harness.md for the
+        geometry mapcheck expects.
+        
+        """.data(using: .utf8)!)
         exit(1)
     }
 

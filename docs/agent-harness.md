@@ -279,8 +279,14 @@ Two things worth knowing before trusting a result:
 
 ## Overworld reference map
 
-`Reference/overworld-first-quest.png` is the complete First Quest overworld
-(map by Rick N. Bruns, NESMaps.com).
+`mapcheck` needs a complete First Quest overworld map at
+`Reference/overworld-first-quest.png`.
+
+**It is not committed.** The map is assembled from the game's own graphics and
+has Nintendo's copyright notice rendered into the image, so it is supplied
+locally exactly like the ROM is — `Reference/*.png` is gitignored. The one used
+here is by Rick N. Bruns (NESMaps.com); any map matching the geometry below
+works, and `--map` points at it anywhere.
 
 Geometry, which makes it machine-checkable rather than just something to look at:
 

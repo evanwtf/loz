@@ -1,0 +1,40 @@
+Copyright (c) 2026 Evan Hoffman
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+
+
+---
+
+SCOPE
+
+The grant above is BSD Zero Clause (SPDX: 0BSD) and covers the original work
+in this repository: the emulator, the player shell, the analysis tools, the
+CLI harness, the tests, and the documentation.
+
+It cannot and does not cover anything the author does not own.
+
+*The Legend of Zelda* is copyright Nintendo. This repository contains no ROM
+image, no save data, and no extracted game assets, and the build produces none
+— you must supply your own dump of a cartridge you own. But two things here are
+derived from Nintendo's work and are not the author's to license:
+
+  - Apps/ZeldaiOS/Assets.xcassets/AppIcon.appiconset/icon-1024.png
+    The app icon, drawn from a character sprite.
+
+  - Sources/ZeldaGame/
+    Routines converted from the game's 6502 machine code to Swift, and the
+    RAM symbol map recovered from observing it run.
+
+Treat those as excluded from the grant. Everything else is yours to do
+whatever you like with, attribution not required.
+
+This project is not affiliated with or endorsed by Nintendo.
