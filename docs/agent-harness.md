@@ -294,19 +294,6 @@ Non-obvious, and worth writing down because it cost real time to derive:
 | `--native` | Install decompiled Swift routines and report their call counts |
 | `--scale <n>` | Screenshot scale; 2–3 keeps pixel art legible |
 
-## Finding RAM addresses
-
-The reliable method needs no prior knowledge: **snapshot, perform a known
-action, snapshot again, diff**.
-
-```sh
-nesrun play zelda.nes --load-state a.state --input "right:200" --save-state b.state
-# then diff the `ram` arrays in the two JSON files
-```
-
-Walking one screen east isolates the screen variable; taking damage isolates
-health. Everything in `Zelda.symbols` was found this way.
-
 ## Audio
 
 ```sh
@@ -392,6 +379,42 @@ Two things worth knowing before trusting a result:
   restricts the search to `$0000-$07FF`; leaving PRG-RAM in is how you find
   where an item is *persisted* rather than where it is cached for this session.
   Confusing the two produces a symbol that works until you reload.
+
+### Running the experiment backwards
+
+`ramdiff` asks *which byte moved when something happened*. The other direction
+is often faster: **write a byte and see what happens**.
+
+```sh
+nesrun tiles zelda.nes --load-state /tmp/sword.state --settle 120 \
+  --poke 066D=07 --hud
+```
+
+`--poke ADDR=VAL` holds a value in RAM while frames run, and `--hud` prints the
+status bar as tile indices. Digits encode as themselves — tile `$07` *is* a
+seven — so for anything the status bar displays, this settles the question
+outright rather than producing a candidate list.
+
+Poking each address in `$0650-$067F` in turn and diffing the whole status bar
+found four symbols in one sweep, and reproduced the already-known `$066E` as a
+control:
+
+| Address | Symbol | What the poke did |
+|---|---|---|
+| `$0658` | `bombCount` | Bomb counter read the poked value |
+| `$066D` | `rupeeCount` | Rupee counter read the poked value |
+| `$0664` | `magicalKey` | Key counter rendered the **letter A**, which is how the game shows the key that never runs out |
+| `$067D` | `rupeesPending` | Rupees ticked upward continuously — 1, 3, 6, 12 at 30, 60, 120, 240 frames |
+
+Two things this method depends on:
+
+- **Hold the value, do not write it once.** The game owns these bytes and will
+  overwrite a single write, and the status bar is only redrawn when the value it
+  displays *changes*. `--poke` re-applies every frame for exactly that reason.
+- **A climbing display means a pending counter, not the counter.** `$067D` looks
+  like the rupee total until you vary the settle time. `$066D` is where rupees
+  are; `$067D` is how many are still being counted in, which is what produces
+  the ticking sound on a pickup.
 
 ## Overworld reference map
 
