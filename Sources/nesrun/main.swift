@@ -61,6 +61,17 @@ func usage() -> Never {
                --verbose            Report every decision the loop makes.
     
     VERIFICATION:
+      ramdiff  Compare two snapshots and report which RAM addresses moved.
+               How the symbol map gets built: do a thing, diff, read.
+               --before <file>      Snapshot from before the event (required).
+               --after <file>       Snapshot from after it (required).
+               --control <file>     A run of similar length in which the event
+                                    did NOT happen. Addresses that moved there
+                                    move on their own and are subtracted. The
+                                    raw diff is hundreds of bytes of noise;
+                                    this is what makes the output readable.
+               --show-noisy         Keep the subtracted ones, marked.
+               --no-prg-ram         Skip $6000-$7FFF (the save files).
       oam      List the actors the PPU is drawing — Link, enemies, and items —
                with positions. What is on screen, not what the map says.
                --load-state <file>  Snapshot to inspect.
@@ -125,6 +136,21 @@ func loadCartridge(_ path: String) -> Cartridge {
 func flag(_ name: String, in args: [String]) -> String? {
     guard let i = args.firstIndex(of: name), i + 1 < args.count else { return nil }
     return args[i + 1]
+}
+
+/// Reads a snapshot named by a flag. Returns nil when the flag is absent, and
+/// exits when it is present but unreadable — a typo'd path should not look the
+/// same as an omitted option.
+func loadState(_ flagName: String) -> SaveState? {
+    guard let path = flag(flagName, in: args) else { return nil }
+    guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+          let state = try? JSONDecoder().decode(SaveState.self, from: data)
+    else {
+        FileHandle.standardError.write(
+            "error: could not read \(flagName) \(path)\n".data(using: .utf8)!)
+        exit(1)
+    }
+    return state
 }
 
 let args = Array(CommandLine.arguments.dropFirst())
@@ -586,6 +612,25 @@ case "audio":
                  """, seconds, samples.count, sampleRate, peak, rms, crossings,
                  Double(crossings) / 2.0 / seconds))
     print("Wrote \(outPath)")
+
+case "ramdiff":
+    // Which addresses an event moved. See RamDiff for why --control is the
+    // flag that makes the output readable.
+    guard let before = loadState("--before"), let after = loadState("--after") else {
+        FileHandle.standardError.write(
+            "error: ramdiff needs --before and --after\n".data(using: .utf8)!)
+        exit(1)
+    }
+    let control = loadState("--control")
+
+    let changes = RamDiff.compare(
+        before: before, after: after, control: control,
+        includePRGRAM: !args.contains("--no-prg-ram"))
+
+    print(RamDiff.report(
+        changes, symbols: Zelda.symbols,
+        hasControl: control != nil,
+        showNoisy: args.contains("--show-noisy")))
 
 case "oam":
     // What is actually on screen, as opposed to what the room layout says.

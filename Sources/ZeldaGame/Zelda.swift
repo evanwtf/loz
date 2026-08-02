@@ -34,6 +34,13 @@ public enum Zelda: GameDefinition {
         // number instead; Level 1's entrance room is $73.
         0x00EB: "currentScreen",
 
+        // Inventory. Both confirmed with `nesrun ramdiff` against a control run
+        // of the same length in which the item was *not* picked up — see
+        // docs/agent-harness.md. The sword is 0 = none, 1 = wooden,
+        // 2 = white, 3 = magical; keys are a plain count.
+        0x0657: "swordLevel",
+        0x066E: "keyCount",
+
         // Health. High nibble is heart containers minus one, low nibble is the
         // count of full hearts remaining.
         0x066F: "linkHealth",

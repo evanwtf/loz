@@ -46,6 +46,7 @@ arguments prints the full flag list for each.
 | `audio --seconds N` | Render the APU to a WAV with signal statistics |
 | `clearroom` | Fight the current room empty, then collect the drop |
 | `oam` | List the actors on screen — Link, enemies, items — with positions |
+| `ramdiff --control C` | Which RAM addresses an event moved — see below |
 | `paltrace` | Log every write reaching palette memory |
 | `embed` | Emit the ROM as Swift source ([rom-free.md](rom-free.md)) |
 
@@ -222,6 +223,59 @@ Reports peak, RMS, and zero-crossing rate. Those statistics are the quickest
 check that the APU is producing music rather than silence or a DC offset — the
 first run showed **zero crossings: 0**, which is exactly what a constant DC
 level looks like and nothing like audio.
+
+## Finding RAM addresses
+
+```sh
+nesrun ramdiff zelda.nes --before A.state --after B.state --control C.state
+```
+
+Snapshot, do the thing, snapshot again, and the difference is a candidate list.
+The catch is that the raw difference is unusable: between two states a few
+hundred frames apart, **hundreds of bytes have moved** — RNG, animation
+counters, sprite scratch, scroll state — and the signal is a byte or two wide.
+
+`--control` is what makes it readable. Run a second sequence of comparable
+length in which the event did *not* happen; anything that moved there moves on
+its own, and is subtracted.
+
+The best control is the same script with only the event removed. For the sword:
+
+```sh
+# the real route
+nesrun play $R --load-state overworld.state \
+  --input "$(cat docs/scripts/sword.txt)" --save-state sword.state
+
+# identical, except `up:70` (which touches the sword) becomes `wait:70`
+nesrun play $R --load-state overworld.state \
+  --input "left:42,up:160,wait:260,right:6,wait:70,wait:60,down:150,down:100,right:60" \
+  --save-state nosword.state
+
+nesrun ramdiff $R --before overworld.state --after sword.state --control nosword.state
+```
+
+```
+177 bytes changed, 164 also changed in the control run -> 13 candidates
+
+  $0008  7F -> 0F
+  ...
+  $0657  00 -> 01  [0->1]
+  $06F6  00 -> 10
+```
+
+Thirteen lines instead of a hundred and seventy-seven, and `[0->1]` flags the
+shape most searches are looking for — a flag going from "don't have it" to
+"have it". `$0657` is the sword, and it is now in `Zelda.symbols`.
+
+Two things worth knowing before trusting a result:
+
+- **A poor control is worse than none.** Combat is nondeterministic, so
+  "fight the room" against "wait the same number of frames" leaves a lot of
+  noise standing. Match the control to the run as closely as the event allows.
+- **Session state and save state are different addresses.** `--no-prg-ram`
+  restricts the search to `$0000-$07FF`; leaving PRG-RAM in is how you find
+  where an item is *persisted* rather than where it is cached for this session.
+  Confusing the two produces a symbol that works until you reload.
 
 ## Overworld reference map
 
