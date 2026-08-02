@@ -26,7 +26,7 @@ dungeon — with sound.
 | Agent harness | Scripted input, PNG capture, snapshots, pathfinding, tracing |
 | Decompilation | 5 routines native and verified; the loop is proven |
 
-150 tests. CI green on a self-hosted macOS runner.
+184 tests. CI green on a self-hosted macOS runner.
 
 ## Layout
 
@@ -61,8 +61,10 @@ swift run -c release nesrun audio zelda.nes --seconds 12 --out title.wav
 swift run -c release nesrun analyze zelda.nes
 ```
 
-For the iOS app, copy your ROM to `Apps/ZeldaiOS/zelda.nes` and build
-`Apps/ZeldaiOS.xcodeproj`. See [docs/ios-app.md](docs/ios-app.md).
+For the iOS app, compile your ROM into the binary once with `swift run nesrun
+embed zelda.nes`, then build `Apps/ZeldaiOS.xcodeproj`. See
+[docs/ios-app.md](docs/ios-app.md) for the app itself and
+[docs/distribution.md](docs/distribution.md) for getting it onto a device.
 
 ## Target cartridge
 
