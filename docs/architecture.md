@@ -53,6 +53,7 @@ Key types:
 | `NES` | The machine, and the CPU's bus. Owns address decoding. |
 | `CPU6502` | Interpreter. Also the correctness oracle for decompiled code. |
 | `PPU` | Dot-based renderer producing a 256×240 RGBA framebuffer. |
+| `APU` | Five channels, non-linearly mixed, resampled to the host rate. |
 | `Mapper` | Protocol; `NROM` and `MMC1` implement it. |
 | `Cartridge` | Parsed iNES image plus CHR-RAM and battery-backed WRAM. |
 | `GameDefinition` | What an app needs to present exactly one game. |
@@ -84,7 +85,7 @@ agent-drivable play mode.
 ## Clocking
 
 The CPU drives everything. `NES.step()` runs one instruction, then runs the PPU
-for three dots per CPU cycle:
+for three dots and the APU for one cycle per CPU cycle:
 
 ```swift
 let cpuCycles = dispatchNativeRoutine() ?? cpu.step()
@@ -92,7 +93,11 @@ for _ in 0..<(cpuCycles * 3) {
     ppu.step()
     if ppu.nmiRequested { cpu.triggerNMI() }
 }
-cpu.setIRQLine(mapper.irqAsserted)
+for _ in 0..<cpuCycles {
+    // The DMC steals cycles from the CPU when it fetches a sample.
+    cpu.stallCycles += apu.step()
+}
+cpu.setIRQLine(mapper.irqAsserted || apu.irqAsserted)
 ```
 
 This has a consequence that matters for decompilation: **a natively-executed
@@ -118,7 +123,7 @@ hand-written decompiled code.
 | `$4014` | OAM DMA (stalls the CPU 513–514 cycles) |
 | `$4016` | Controller strobe (write) / pad 1 (read) |
 | `$4017` | Pad 2 (read) / APU frame counter (write) |
-| `$4000-$4017` | APU — not yet implemented |
+| `$4000-$4013`, `$4015` | APU — see [emulator-apu.md](emulator-apu.md) |
 | `$4020-$FFFF` | Cartridge, via the mapper |
 
 The PPU has its own separate address space, decoded in `PPU.ppuRead/ppuWrite`.

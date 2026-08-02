@@ -1,7 +1,8 @@
 # Testing
 
-180 tests across 16 suites, using swift-testing. `swift test` runs in ~1.2s, so
-there is no excuse for not running it.
+184 tests across 17 suites, using swift-testing. `swift test` runs in ~10s —
+most of which is the four `Host input path` and seven `Auto-resume` tests
+sharing a ten-second budget — so there is no excuse for not running it.
 
 ## Philosophy
 
@@ -16,7 +17,7 @@ timing.
 
 ## Suites
 
-Sixteen suites across fifteen files — `APUTests.swift` declares three.
+Seventeen suites across fifteen files — `APUTests.swift` declares three.
 
 ### `NESCoreTests` — the emulator (143)
 
@@ -46,12 +47,22 @@ looks trivial and is not: status bar sprites became phantom targets, and a
 dropped key classified as an enemy cost 552 sword swings against an item that
 only had to be walked onto.
 
-### `NESPlayerTests` — the app shell (20)
+### `NESPlayerTests` — the app shell (24)
 
 | Suite | Tests | Guards |
 |---|---|---|
 | `On-screen control layout` | 13 | Controls fit the screen in **both** orientations; d-pad hit regions |
 | `Auto-resume` | 7 | Snapshots round-trip; foreign and corrupt ones are refused |
+| `Host input path` | 4 | A button pressed through `EmulatorHost` reaches the game |
+
+`Host input path` exists because every layer below it can be correct while the
+app is still unplayable. It drives the committed boot script through the host
+exactly as `nesrun` does, then asserts that holding a direction actually moves
+Link — the same claim a player makes when they say the controls do not work.
+What it cannot cover is anything above `setButton`: the input faults that
+actually shipped were in touch delivery and view invalidation, and were caught
+by on-screen instrumentation rather than by this suite. See
+[ios-app.md](ios-app.md#writing-a-diagnostic-that-can-be-trusted).
 
 ### `ZeldaGameTests` — the decompilation (7)
 

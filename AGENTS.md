@@ -99,9 +99,9 @@ Sources/
   zeldamac/    macOS app, runs straight from SwiftPM
 Apps/          ZeldaiOS / ZeldatvOS Xcode projects — thin shells, scheme "Zelda"
 Tests/         NESCoreTests, NESPlayerTests, ZeldaGameTests
-docs/          architecture, decompilation, agent-harness, testing, ios-app,
-               adding-a-game, rom-format, rom-free, emulator-{cpu,ppu,mappers};
-               README.md is the index
+docs/          architecture, decompilation, agent-harness, testing, adding-a-game,
+               rom-format, rom-free, emulator-{cpu,ppu,apu,mappers},
+               {ios,macos}-app, distribution; README.md is the index
 Reference/     first-quest overworld map PNG, used by `nesrun mapcheck`
 ```
 

@@ -168,9 +168,13 @@ Three separate mechanisms, each with a different job:
 
 ## Sideloading to a device
 
-Free Apple ID signing gives a 7-day provisioning profile; a paid developer
-account gives a year. Set your team in the target's signing settings, then run
-to a connected device. The bundle identifier is `wtf.evan.loz.zelda`.
+The bundle identifier is `wtf.evan.loz.zelda` and signing is automatic — set
+your team in the target's signing settings and run to a connected device.
+
+Everything else about getting builds onto hardware, including wireless install,
+ad hoc distribution to someone else's phone, and why TestFlight is the wrong
+tool for a build with the cartridge compiled in, is in
+[distribution.md](distribution.md).
 
 ## Auto-resume
 
