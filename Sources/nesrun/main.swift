@@ -48,7 +48,21 @@ func usage() -> Never {
                --move-frames <n>    Frames per move (default 170).
                --max-screens <n>    Search limit (default 80).
                --save-state <file>  Write the arrival state.
+               --no-tiles           Skip the tile-aware routes and sweep only.
                --verbose            Report each screen as it is explored.
+      tiles    Read the room's geometry out of the nametable as a 16x11 walkable
+               grid, and route across it. Replaces guessing at a room with
+               reading the one the emulator is already drawing.
+               --load-state <file>  Snapshot to read.
+               --input <script>     Input to run first.
+               --settle <n>         Frames before reading (default 30).
+               --to-cell <C,R>      Route there; prints the path and a script.
+                                    Exits 2 when there is no route.
+               --frames-per-cell <n>  Frames per 16px cell in the script (16).
+               --raw                Dump the whole 32x30 nametable as hex.
+               --census             Report which tiles Link stood on while the
+                                    input ran — how the walkable set is built.
+               --table <n>          Nametable to read (default: the active one).
     
       clearroom Fight everything in the current room until it is empty, then
                collect what dropped. A closed loop, not a fixed script: enemies
@@ -528,7 +542,8 @@ case "navigate":
     let found = Navigator.search(
         cartridge: cartridge, from: start, to: target,
         framesPerMove: frames, maxScreens: maxScreens,
-        verbose: args.contains("--verbose"))
+        verbose: args.contains("--verbose"),
+        tileAware: !args.contains("--no-tiles"))
 
     guard let found else {
         print("No route found within \(maxScreens) explored screens.")
@@ -662,6 +677,66 @@ case "oam":
         linkX: Int(nes.cpuRead(0x0070)),
         linkY: Int(nes.cpuRead(0x0084))))
 
+case "tiles":
+    let nes = try! NES(cartridge: cartridge)
+    if let state = loadState("--load-state") { try! nes.restoreState(state) }
+
+    // The census has to sample *while* the script runs — the whole point is
+    // which tiles Link passed over, not where he stopped.
+    var census = Tiles.Census()
+    if args.contains("--census") {
+        for segment in parseInputScript(flag("--input", in: args)) {
+            for _ in 0..<segment.frames {
+                nes.controller1.releaseAll()
+                nes.controller1.press(segment.buttons)
+                nes.stepFrame()
+                census.sample(nes: nes)
+            }
+        }
+        nes.controller1.releaseAll()
+    } else {
+        runInputScript(nes, script: flag("--input", in: args), filmstrip: nil, every: 0, scale: 1)
+    }
+    for _ in 0..<(Int(flag("--settle", in: args) ?? "30") ?? 30) { nes.stepFrame() }
+
+    let table = Int(flag("--table", in: args) ?? "") ?? nes.ppu.activeNametable
+
+    if args.contains("--census") {
+        print(census.report)
+    } else if args.contains("--raw") {
+        print(Tiles.rawDump(nes: nes, table: table))
+    } else {
+        let grid = Tiles.grid(nes: nes, table: table)
+        let start = Tiles.linkCell(nes: nes)
+        print(String(
+            format: "screen $%02X  link cell (%d,%d)  nametable %d",
+            nes.cpuRead(Navigator.screenAddress), start.column, start.row, table))
+
+        // A goal turns the dump into a route. Without one this is just a
+        // picture of the room, which is what you want when checking the
+        // walkability table itself.
+        if let goal = flag("--to-cell", in: args) {
+            let parts = goal.split(separator: ",").compactMap { Int($0) }
+            guard parts.count == 2 else {
+                FileHandle.standardError.write(
+                    "error: --to-cell wants COLUMN,ROW\n".data(using: .utf8)!)
+                exit(1)
+            }
+            let target = TileGrid.Cell(column: parts[0], row: parts[1])
+            if let path = grid.path(from: start, to: target) {
+                print(grid.render(path: path, start: start, goal: target))
+                let frames = Int(flag("--frames-per-cell", in: args) ?? "16") ?? 16
+                print("script: " + RouteScript.script(for: path, framesPerCell: frames))
+            } else {
+                print(grid.render(start: start, goal: target))
+                print("no route — fall back to a sweep")
+                exit(2)
+            }
+        } else {
+            print(grid.render(start: start))
+        }
+    }
+
 case "clearroom":
     // Closed loop: read OAM, walk at the nearest actor, swing when close.
     guard let statePath = flag("--load-state", in: args) else {
@@ -719,13 +794,13 @@ default:
 }
 
 /// Parses and runs an input script such as "wait:60,start:4,up+a:12".
-func runInputScript(
-    _ nes: NES,
-    script: String?,
-    filmstrip: String?,
-    every: Int,
-    scale: Int
-) {
+/// Parses the input-script syntax into button/duration segments.
+///
+/// Split out from `runInputScript` so a caller that needs to do something
+/// between frames — the tile census samples what Link is standing on, which is
+/// meaningless once the script has finished — drives the same parse rather than
+/// growing a second, subtly different one.
+func parseInputScript(_ script: String?) -> [(buttons: NESButton, frames: Int)] {
     var segments: [(buttons: NESButton, frames: Int)] = []
 
     // Strip `#` comments and line breaks so a script can be kept in a file with
@@ -769,6 +844,17 @@ func runInputScript(
         }
         segments.append((buttons, frames))
     }
+    return segments
+}
+
+func runInputScript(
+    _ nes: NES,
+    script: String?,
+    filmstrip: String?,
+    every: Int,
+    scale: Int
+) {
+    let segments = parseInputScript(script)
 
     if let filmstrip {
         try? FileManager.default.createDirectory(

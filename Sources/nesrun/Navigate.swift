@@ -1,4 +1,5 @@
 import Foundation
+import NESAnalysis
 import NESCore
 
 /// Breadth-first search over overworld screens, driving the real game.
@@ -15,6 +16,12 @@ import NESCore
 enum Navigator {
     /// Address of the current overworld screen number.
     static let screenAddress: UInt16 = 0x00EB
+
+    /// Frames to hold a direction per 16-pixel cell.
+    ///
+    /// Measured from the committed routes: `right:260` crosses a 256-pixel
+    /// screen, so Link covers roughly a pixel a frame once he is moving.
+    static let tileFramesPerCell = 16
     /// Health: high nibble is heart containers minus one, low nibble is full
     /// hearts remaining.
     static let healthAddress: UInt16 = 0x066F
@@ -92,6 +99,76 @@ enum Navigator {
         return result
     }
 
+    /// Moves derived from the room's actual geometry, one per direction.
+    ///
+    /// For each edge, A* routes from Link to the nearest walkable cell on that
+    /// edge and the result is emitted as presses. Where the walkability table
+    /// is confident this replaces a blind sweep with a route that is right the
+    /// first time.
+    ///
+    /// **These are additions, not replacements.** They are tried first and the
+    /// sweeps stay behind them, so a walkability table that is wrong or simply
+    /// does not know a tile costs an extra attempt and nothing else. A grid
+    /// that says "no route" produces no move here at all and the search
+    /// proceeds exactly as it did before — degrading rather than deadlocking is
+    /// the whole reason the old moves are still in the list.
+    static func tileAwareMoves(nes: NES, framesPerCell: Int) -> [Move] {
+        let grid = Tiles.grid(nes: nes)
+        let start = Tiles.linkCell(nes: nes)
+        guard grid.isWalkable(start) else { return [] }
+
+        // One step beyond the edge cell is off-screen, which is what actually
+        // triggers the transition, so each route ends with a nudge outward.
+        let edges: [(name: String, cells: [TileGrid.Cell], push: NESButton)] = [
+            ("up", (0..<grid.columns).map { TileGrid.Cell(column: $0, row: 0) }, .up),
+            ("down", (0..<grid.columns).map {
+                TileGrid.Cell(column: $0, row: grid.rows - 1)
+            }, .down),
+            ("left", (0..<grid.rows).map { TileGrid.Cell(column: 0, row: $0) }, .left),
+            ("right", (0..<grid.rows).map {
+                TileGrid.Cell(column: grid.columns - 1, row: $0)
+            }, .right),
+        ]
+
+        var result: [Move] = []
+        for edge in edges {
+            let routes = edge.cells.compactMap { grid.path(from: start, to: $0) }
+            guard let shortest = routes.min(by: { $0.count < $1.count }) else { continue }
+
+            var presses = pressesFor(path: shortest, framesPerCell: framesPerCell)
+            presses.append(Press(button: edge.push, frames: framesPerCell * 2))
+            result.append(Move(name: "\(edge.name)-tiles", presses: presses))
+        }
+        return result
+    }
+
+    /// Turns a grid route into presses, collapsing runs the same way
+    /// `RouteScript` does for the text form.
+    private static func pressesFor(
+        path: [TileGrid.Cell], framesPerCell: Int
+    ) -> [Press] {
+        var presses: [Press] = []
+        for (from, to) in zip(path, path.dropFirst()) {
+            let button: NESButton = if to.column > from.column {
+                .right
+            } else if to.column < from.column {
+                .left
+            } else if to.row > from.row {
+                .down
+            } else {
+                .up
+            }
+
+            if let last = presses.last, last.button == button {
+                presses[presses.count - 1] = Press(
+                    button: button, frames: last.frames + framesPerCell)
+            } else {
+                presses.append(Press(button: button, frames: framesPerCell))
+            }
+        }
+        return presses
+    }
+
     /// Searches for `target`, returning the route and the state on arrival.
     static func search(
         cartridge: Cartridge,
@@ -99,7 +176,8 @@ enum Navigator {
         to target: UInt8,
         framesPerMove: Int,
         maxScreens: Int,
-        verbose: Bool
+        verbose: Bool,
+        tileAware: Bool = true
     ) -> Node? {
         let moveSet = moves(crossing: framesPerMove)
         let nes = try! NES(cartridge: cartridge)
@@ -123,7 +201,16 @@ enum Navigator {
                     + "depth \(node.route.count), \(visited.count) seen")
             }
 
-            for move in moveSet {
+            // Tile-aware routes are computed per screen — they depend on the
+            // room in front of Link, not on the search — and go first so a
+            // known-good route is tried before any blind sweep.
+            try? nes.restoreState(node.state)
+            for _ in 0..<8 { nes.stepFrame() }
+            let screenMoves = (tileAware
+                ? tileAwareMoves(nes: nes, framesPerCell: tileFramesPerCell)
+                : []) + moveSet
+
+            for move in screenMoves {
                 try? nes.restoreState(node.state)
 
                 for press in move.presses {

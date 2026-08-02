@@ -27,7 +27,7 @@ dungeon — with sound.
 | Agent harness | Scripted input, PNG capture, snapshots, pathfinding, tracing |
 | Decompilation | 5 routines native and verified; the loop is proven |
 
-199 tests across 19 suites. CI green on a self-hosted macOS runner.
+229 tests across 23 suites. CI green on a self-hosted macOS runner.
 
 ## You must supply the ROM
 
@@ -79,6 +79,7 @@ swift run -c release nesrun                    # full flag list
 | `probe --inputs P` | Many candidate scripts in one process |
 | `navigate --to XX` | Pathfind to an overworld screen |
 | `clearroom` | Fight the current room empty, then collect the drop |
+| `tiles` | Read room geometry from the nametable; route across it |
 | `ramdiff --control C` | Which RAM addresses an event moved |
 | `oam` | Actors on screen — Link, enemies, items — with positions |
 | `mapcheck` | Score a rendered screen against the reference map |

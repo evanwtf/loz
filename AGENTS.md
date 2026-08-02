@@ -23,7 +23,7 @@ must stay playable at every step.
 - Swift 6 (`swift-tools-version: 6.0`), SwiftPM; platforms: macOS 14, iOS 17, tvOS 17.
 - No third-party package dependencies; the `nesrun` CLI is hand-rolled on purpose.
 - SwiftUI (`NESPlayer` shell), AVAudioEngine (audio), GameController framework.
-- Tests use swift-testing (`@Test`, `#expect`), not XCTest — 199 tests in 19 suites.
+- Tests use swift-testing (`@Test`, `#expect`), not XCTest — 229 tests in 23 suites.
 - swiftformat (`.swiftformat`) for lint. CI (`.github/workflows/ci.yml`) runs three
   jobs on a self-hosted macOS ARM64 runner: build+test+release+CLI smoke, lint,
   and an iOS simulator build.
@@ -79,7 +79,7 @@ xcodebuild -project Apps/ZeldaiOS.xcodeproj -scheme Zelda \
 ```
 
 `nesrun` subcommands — inspection: `info hash analyze disasm`; running: `run
-play probe navigate clearroom`; verification: `ramdiff oam mapcheck audio
+play probe navigate clearroom tiles`; verification: `ramdiff oam mapcheck audio
 paltrace`; codegen: `embed`. Run `nesrun` with no arguments for the full flag
 list (deliberately exhaustive — a command missing there is a command nobody
 finds); input-script syntax (`wait:60,start:4,up+a:12`) and worked examples are

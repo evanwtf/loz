@@ -53,6 +53,33 @@ public final class PPU {
 
     /// 2KB of nametable RAM. How it maps into $2000-$2FFF depends on mirroring.
     public internal(set) var vram = [UInt8](repeating: 0, count: 0x800)
+
+    /// Which of the four logical nametables the PPU is currently rendering
+    /// from, taken from the low two bits of the control register.
+    ///
+    /// A caller that assumes table 0 reads the wrong screen the moment the game
+    /// flips these, which on a scrolling title is most of the time.
+    public var activeNametable: Int {
+        (control.contains(.nametableY) ? 2 : 0) | (control.contains(.nametableX) ? 1 : 0)
+    }
+
+    /// One background tile index, by grid position, from a logical nametable.
+    ///
+    /// A nametable is 32 columns by 30 rows of 8x8 tile indices. Reads go
+    /// through the mapper's current mirroring rather than indexing `vram`
+    /// directly: with only 2KB of real RAM behind four logical tables, ignoring
+    /// mirroring returns a plausible-looking grid from the wrong half — a
+    /// failure that shows up as a wrong route, never as an error.
+    ///
+    /// Out-of-range coordinates read as zero. Callers scanning a window that
+    /// runs off the edge want a blank, not a trap.
+    public func nametableTile(column: Int, row: Int, table: Int) -> UInt8 {
+        guard (0..<32).contains(column), (0..<30).contains(row) else { return 0 }
+        let base = UInt16(0x2000 + (table & 3) * 0x400)
+        let offset = UInt16(row * 32 + column)
+        return vram[mapper.mirroring.vramIndex(for: base + offset)]
+    }
+
     public internal(set) var paletteRAM = [UInt8](repeating: 0, count: 32)
     public internal(set) var oam = [UInt8](repeating: 0, count: 256)
     public var oamAddress: UInt8 = 0

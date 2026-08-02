@@ -45,6 +45,7 @@ arguments prints the full flag list for each.
 | `mapcheck` | Score a rendered screen against the reference map |
 | `audio --seconds N` | Render the APU to a WAV with signal statistics |
 | `clearroom` | Fight the current room empty, then collect the drop |
+| `tiles` | Read the room's geometry out of the nametable; route across it |
 | `oam` | List the actors on screen — Link, enemies, items — with positions |
 | `ramdiff --control C` | Which RAM addresses an event moved — see below |
 | `paltrace` | Log every write reaching palette memory |
@@ -160,6 +161,76 @@ Two things this had to solve, both non-obvious:
 
 The same sweep trick is what gets Link through dungeon doorways, which sit at
 fixed positions in each wall.
+
+## Reading the room instead of guessing at it
+
+Sweeping works and is slow, because it is still guessing. The emulator is
+already rendering the room, so its geometry is sitting in the nametable —
+`tiles` reads it into a 16x11 grid of 16-pixel cells below the status bar,
+classifies each cell walkable or blocked, and runs A* across it.
+
+```sh
+swift run -c release nesrun tiles zelda.nes --load-state /tmp/r72.state --settle 90
+# screen $72  link cell (14,5)  nametable 0
+# ################
+# ##............##
+# ...
+```
+
+Add a goal to get a route, drawn on the grid and emitted as an ordinary input
+script — so pathfinder output feeds `play` and `probe` unchanged:
+
+```sh
+… --to-cell 2,2
+# ##G...........##
+# ##o...........##
+# ##ooooooooooooS#
+# script: left:192,up:48
+```
+
+That script, replayed, lands Link on exactly cell (2,2).
+
+`navigate` uses the same grid: for each edge it routes to the nearest walkable
+cell and tries that **before** the sweeps. Measured from the overworld start,
+with `--max-screens 30`:
+
+| Target | Tile-aware | Sweep only |
+|---|---|---|
+| `$76` | 0.5s | 3.5s |
+| `$66` | 5.4s | 14.0s |
+| `$57` | **26.5s** | **not found** |
+
+`--no-tiles` turns it off, which is how that table was measured.
+
+**The sweeps are still there on purpose.** A grid that says "no route" produces
+no tile-aware move at all and the search proceeds exactly as before, so a
+walkability table that is wrong or incomplete costs an attempt rather than
+deadlocking.
+
+### Building the walkability table
+
+The tile set is small but its meaning is not obvious — `$24` is blank space in
+the status bar and an open doorway in a dungeon. So it is built by observation:
+
+```sh
+swift run -c release nesrun tiles zelda.nes --load-state /tmp/sword.state \
+  --census --input "$(cat docs/scripts/to-level1.txt)"
+```
+
+`--census` replays a route and reports which tiles were under Link, because a
+tile he occupied is walkable by definition. Two things it taught, both of which
+cost a wrong table first:
+
+- **Sample only when the screen is settled.** `$00EB` changes *during* the
+  scroll, so for most of a transition Link's coordinates and the nametable
+  describe different screens. At 40 frames of settle the census was still
+  attributing the bridge on `$38` to `$37`; it now waits 96, the same number the
+  committed routes encode as `wait:90`.
+- **The census is not ground truth.** The game decides collisions from a box
+  around Link's feet, not from the cell under his centre, so it occasionally
+  reports him standing on a cell he is only leaning into. Unrecognised tiles
+  therefore stay *blocked* — the error costs a longer route, never a walk into a
+  wall.
 
 ## Committed routes
 
