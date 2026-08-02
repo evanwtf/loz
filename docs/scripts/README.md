@@ -35,8 +35,8 @@ run $S/sword.state     to-level1.txt      $S/level1.state
 run $S/level1.state    level1-key-room.txt $S/r72.state
 
 # Combat is a closed loop, not a script: enemies move, so there is nothing to
-# replay. `clearroom` reads OAM each tick and fights until the room is empty,
-# then walks onto whatever dropped.
+# replay. `clearroom` fights until the enemy slot table at $0350 is empty, then
+# walks onto whatever dropped.
 swift run -c release nesrun clearroom $R --load-state $S/r72.state \
   --input "left:40" --max-frames 6000 --save-state $S/r72-key.state
 

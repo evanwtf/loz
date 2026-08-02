@@ -1,6 +1,6 @@
 # Testing
 
-184 tests across 17 suites, using swift-testing. `swift test` runs in ~10s —
+199 tests across 19 suites, using swift-testing. `swift test` runs in ~10s —
 most of which is the four `Host input path` and seven `Auto-resume` tests
 sharing a ten-second budget — so there is no excuse for not running it.
 
@@ -17,7 +17,7 @@ timing.
 
 ## Suites
 
-Seventeen suites across fifteen files — `APUTests.swift` declares three.
+Nineteen suites across seventeen files — `APUTests.swift` declares three.
 
 ### `NESCoreTests` — the emulator (143)
 
@@ -36,11 +36,12 @@ Seventeen suites across fifteen files — `APUTests.swift` declares three.
 | `Save states` | 6 | Round-trip fidelity; restored machines stay in lockstep |
 | `Native routine dispatch` | 6 | Native dispatch replaces interpretation transparently |
 
-### `NESAnalysisTests` — the dev-only tooling (10)
+### `NESAnalysisTests` — the dev-only tooling (16)
 
 | Suite | Tests | Guards |
 |---|---|---|
 | `OAM entity reading` | 10 | Sprite decode, clustering into actors, item vs enemy |
+| `Room clear monitor` | 6 | When "the room is empty" may be believed |
 
 Every case in that suite is a mistake the harness actually made. Reading OAM
 looks trivial and is not: status bar sprites became phantom targets, and a
@@ -64,11 +65,12 @@ actually shipped were in touch delivery and view invalidation, and were caught
 by on-screen instrumentation rather than by this suite. See
 [ios-app.md](ios-app.md#writing-a-diagnostic-that-can-be-trusted).
 
-### `ZeldaGameTests` — the decompilation (7)
+### `ZeldaGameTests` — the decompilation (16)
 
 | Suite | Tests | Guards |
 |---|---|---|
 | `Decompiled routine equivalence` | 7 | Each native routine matches the 6502 original, writes in order |
+| `Zelda enemy slots` | 9 | Which object slots hold killable enemies, and which do not |
 
 These seven are the only tests that need `zelda.nes`. They skip cleanly when it
 is absent, which is why CI passes on a clean checkout.
