@@ -63,6 +63,10 @@ func usage() -> Never {
                --census             Report which tiles Link stood on while the
                                     input ran — how the walkable set is built.
                --table <n>          Nametable to read (default: the active one).
+               --hud                Print the status bar as tile indices.
+               --poke <A=V,...>     Hold hex values in RAM while frames run.
+                                    With --hud this runs the RAM experiment
+                                    backwards: write a byte, see what changes.
     
       clearroom Fight everything in the current room until it is empty, then
                collect what dropped. A closed loop, not a fixed script: enemies
@@ -697,9 +701,23 @@ case "tiles":
     } else {
         runInputScript(nes, script: flag("--input", in: args), filmstrip: nil, every: 0, scale: 1)
     }
-    for _ in 0..<(Int(flag("--settle", in: args) ?? "30") ?? 30) { nes.stepFrame() }
+    stepHolding(
+        nes,
+        pokes: parsePokes(flag("--poke", in: args)),
+        frames: Int(flag("--settle", in: args) ?? "30") ?? 30)
 
     let table = Int(flag("--table", in: args) ?? "") ?? nes.ppu.activeNametable
+
+    // The status bar, as tile indices. Digits encode as themselves — `00` is a
+    // zero — so a poke that lands in the inventory shows up here directly.
+    if args.contains("--hud") {
+        for row in 0..<8 {
+            let cells = (0..<32).map {
+                String(format: "%02X", nes.ppu.nametableTile(column: $0, row: row, table: table))
+            }
+            print(String(format: "  %02d  ", row) + cells.joined(separator: " "))
+        }
+    }
 
     if args.contains("--census") {
         print(census.report)
@@ -794,6 +812,44 @@ default:
 }
 
 /// Parses and runs an input script such as "wait:60,start:4,up+a:12".
+/// Parses `--poke ADDR=VAL,ADDR=VAL` into hex address/value pairs.
+///
+/// Writing a value and watching what changes on screen is the cheapest way to
+/// confirm what an address *is*. `ramdiff` says which byte moved when something
+/// happened; this says what happens when a byte moves, which is the direction
+/// that settles a guess. Poking `$066D` and seeing the rupee counter read 8
+/// leaves nothing to argue about.
+func parsePokes(_ spec: String?) -> [(address: UInt16, value: UInt8)] {
+    guard let spec else { return [] }
+    var pokes: [(UInt16, UInt8)] = []
+    for pair in spec.split(separator: ",") {
+        let parts = pair.split(separator: "=")
+        guard parts.count == 2,
+              let address = UInt16(parts[0].trimmingCharacters(in: .whitespaces), radix: 16),
+              let value = UInt8(parts[1].trimmingCharacters(in: .whitespaces), radix: 16)
+        else {
+            FileHandle.standardError.write(
+                "warning: skipping malformed poke '\(pair)'\n".data(using: .utf8)!)
+            continue
+        }
+        pokes.append((address, value))
+    }
+    return pokes
+}
+
+/// Applies pokes and runs frames, re-poking every frame.
+///
+/// Re-applied rather than written once because the game owns these bytes: a
+/// single write is overwritten by the next update of whatever it belongs to,
+/// and the status bar is only redrawn when the value it displays changes — so a
+/// poke that does not stick is a poke that never shows.
+func stepHolding(_ nes: NES, pokes: [(address: UInt16, value: UInt8)], frames: Int) {
+    for _ in 0..<frames {
+        for poke in pokes { nes.cpuWrite(poke.address, poke.value) }
+        nes.stepFrame()
+    }
+}
+
 /// Parses the input-script syntax into button/duration segments.
 ///
 /// Split out from `runInputScript` so a caller that needs to do something

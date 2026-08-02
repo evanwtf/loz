@@ -1,6 +1,6 @@
 # Testing
 
-229 tests across 23 suites, using swift-testing. `swift test` runs in ~10s —
+232 tests across 24 suites, using swift-testing. `swift test` runs in ~10s —
 most of which is the four `Host input path` and seven `Auto-resume` tests
 sharing a ten-second budget — so there is no excuse for not running it.
 
@@ -17,7 +17,7 @@ timing.
 
 ## Suites
 
-Twenty-three suites across twenty files — `APUTests.swift` declares three.
+Twenty-four suites across twenty files — `APUTests.swift` declares three.
 
 ### `NESCoreTests` — the emulator (150)
 
@@ -68,13 +68,14 @@ actually shipped were in touch delivery and view invalidation, and were caught
 by on-screen instrumentation rather than by this suite. See
 [ios-app.md](ios-app.md#writing-a-diagnostic-that-can-be-trusted).
 
-### `ZeldaGameTests` — the decompilation (27)
+### `ZeldaGameTests` — the decompilation (30)
 
 | Suite | Tests | Guards |
 |---|---|---|
 | `Decompiled routine equivalence` | 7 | Each native routine matches the 6502 original, writes in order |
 | `Zelda enemy slots` | 9 | Which object slots hold killable enemies, and which do not |
 | `Zelda playfield` | 11 | Grid geometry against measured positions; the doorway rule |
+| `Zelda symbol map` | 3 | Every recovered symbol is present under its measured address |
 
 These seven are the only tests that need `zelda.nes`. They skip cleanly when it
 is absent, which is why CI passes on a clean checkout.

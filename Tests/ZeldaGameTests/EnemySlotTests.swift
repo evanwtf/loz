@@ -87,3 +87,45 @@ struct EnemySlotTests {
         #expect(Zelda.symbols[Zelda.enemySlots.lowerBound] == "enemyTypes")
     }
 }
+
+/// The symbol map is the project's record of what has actually been established
+/// about this cartridge's RAM, so the things it claims should be asserted rather
+/// than left as comments.
+@Suite("Zelda symbol map")
+struct SymbolMapTests {
+    @Test("Every symbol recovered so far is present under its measured address")
+    func knownSymbols() {
+        let expected: [UInt16: String] = [
+            0x0070: "linkPositionX",
+            0x0084: "linkPositionY",
+            0x0098: "linkFacing",
+            0x00EB: "currentScreen",
+            0x0350: "enemyTypes",
+            0x0657: "swordLevel",
+            0x0658: "bombCount",
+            0x0664: "magicalKey",
+            0x066D: "rupeeCount",
+            0x066E: "keyCount",
+            0x066F: "linkHealth",
+            0x0670: "linkPartialHeart",
+            0x067D: "rupeesPending",
+        ]
+        for (address, name) in expected {
+            #expect(Zelda.symbols[address] == name, "at \(String(address, radix: 16))")
+        }
+    }
+
+    /// The save slots are 0x300 apart, which is what makes them three slots
+    /// rather than one region that happens to have three names.
+    @Test("The three battery save slots are evenly spaced in PRG RAM")
+    func saveSlots() {
+        #expect(Zelda.symbols[0x6000] == "saveSlot0")
+        #expect(Zelda.symbols[0x6300] == "saveSlot1")
+        #expect(Zelda.symbols[0x6600] == "saveSlot2")
+    }
+
+    @Test("An address nothing is known about has no name")
+    func unknownAddress() {
+        #expect(Zelda.symbols[0x1234] == nil)
+    }
+}
