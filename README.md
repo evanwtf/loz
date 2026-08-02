@@ -4,11 +4,10 @@ An NES emulator written from scratch in Swift, being incrementally decompiled
 into a native Swift port of *The Legend of Zelda*, to run on iPhone, Apple TV,
 and macOS. Not for the App Store.
 
-It ships four things: a SwiftPM package of emulator libraries, a `nesrun` CLI
-for driving the game headlessly, a macOS app that runs straight from SwiftPM,
-and iOS/tvOS Xcode app targets. **One app = one game** — there is no ROM picker
-and no game library. The emulation machinery is reusable libraries; each title
-is a small game target plus a thin app target that embeds its own ROM.
+Four surfaces: a SwiftPM package of emulator libraries, a `nesrun` CLI for
+driving the game headlessly, a macOS app, and iOS/tvOS Xcode targets.
+**One app = one game** — no ROM picker, no game library. Each title is a small
+game target plus a thin app target that embeds its own ROM.
 
 ## Status
 
@@ -30,14 +29,21 @@ dungeon — with sound.
 
 184 tests across 17 suites. CI green on a self-hosted macOS runner.
 
-## Supplying the ROM
+## You must supply the ROM
 
-Running the game needs `zelda.nes` beside the package — your own dump of a
-cartridge you own. No ROM is included or committed; `.nes` files, `.state`
-snapshots, and the overworld reference map are all gitignored. Each
+**This repository does not include the game, and none is provided.** To run
+anything that plays Zelda you need `zelda.nes` — your own dump of a cartridge
+you own — placed beside the package. Where you get it is your problem, not this
+project's; no ROM, link, or download is offered here, and requests for one will
+not be answered.
+
+`.nes` files, `.state` snapshots, and the overworld reference map are all
+gitignored, so nothing derived from the cartridge can be committed by accident.
 `GameDefinition` pins an expected SHA-256, so a wrong dump fails loudly rather
-than producing subtle nonsense. `swift build` and `swift test` do **not** need
-it: the tests synthesise iNES images in memory and ROM-dependent tests skip.
+than producing subtle nonsense.
+
+`swift build` and `swift test` do **not** need it: the tests synthesise iNES
+images in memory, and the ROM-dependent tests skip cleanly when it is absent.
 
 ## Usage
 
@@ -50,11 +56,10 @@ swift run -c release zeldamac zelda.nes --selftest   # headless health check
 
 Keyboard: arrows for the d-pad, `Z`/`X` for B/A, Return/Space for START/SELECT,
 `P` pause, `R` reset, `D` diagnostics, `F` fast-forward. MFi, Xbox, and
-DualSense controllers connect automatically.
-
-`--selftest` runs 300 frames with no window and exits non-zero if the
-framebuffer is blank or audio is off-rate — the way to check the macOS path over
-SSH or on a runner with no display ([docs/macos-app.md](docs/macos-app.md)).
+DualSense controllers connect automatically. `--selftest` runs 300 frames with
+no window and exits non-zero if the framebuffer is blank or audio is off-rate —
+the way to check the macOS path over SSH or on a display-less runner
+([docs/macos-app.md](docs/macos-app.md)).
 
 ### `nesrun` — the headless harness
 
@@ -150,11 +155,7 @@ xcodebuild -project Apps/ZeldaiOS.xcodeproj -scheme Zelda \
 ## Project layout
 
 ```
-Sources/
-  NESCore/     Emulator — ships inside every game app
-  NESAnalysis/ Disassembler, execution tracing, routine verifier (dev only)
-  NESPlayer/   Reusable SwiftUI shell: screen, touch/keyboard/controller input
-  ZeldaGame/   Zelda metadata, symbol map, decompiled routines
+Sources/       the four library targets above, plus:
   nesrun/      CLI harness
   zeldamac/    macOS app, runs straight from SwiftPM
 Apps/          iOS and tvOS app targets (scheme "Zelda"), plus PadTest
