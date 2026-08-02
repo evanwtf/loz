@@ -1,6 +1,7 @@
 import Foundation
 import NESAnalysis
 import NESCore
+import ZeldaGame
 
 /// Fights whatever is in the current room until it is empty.
 ///
@@ -10,9 +11,19 @@ import NESCore
 /// swinging killed one Keese and then waited out ninety swings while the other
 /// two drifted to the far wall — a fixed script has no way to notice that.
 ///
-/// The loop is deliberately simple: every few frames, look at OAM, walk at the
-/// nearest actor, and swing when close enough. It does not need to be a good
-/// player, only a reliable one.
+/// The loop is deliberately simple: every few frames, walk at the nearest
+/// actor, and swing when close enough. It does not need to be a good player,
+/// only a reliable one.
+///
+/// It reads two different sources for two different questions, which is the
+/// point rather than an accident:
+///
+/// - **How many enemies are left** comes from the slot table at `$0350`. OAM
+///   undercounts — room `$63` drew two Stalfos while three were live, and the
+///   third simply had not been rendered yet.
+/// - **Where to swing** comes from OAM, because the slot table carries type
+///   and not position. An enemy the game knows about but has not drawn cannot
+///   be aimed at, so the loop waits a tick for it to appear.
 enum ClearRoom {
     struct Outcome {
         var cleared = false
@@ -39,6 +50,17 @@ enum ClearRoom {
     /// its replacement appears, so a single empty read reported "CLEARED, 0
     /// actors left" for a room that still had a Keese in it.
     static let clearConfirmTicks = 6
+
+    /// Ticks to keep waiting for enemies to appear before an empty slot table
+    /// is allowed to mean the room was always empty.
+    ///
+    /// Reading the slot table rather than OAM introduces this hazard, so it is
+    /// handled explicitly instead of being left to luck: entering Level 1 room
+    /// `$72`, the table reads all zero for about 24 frames — three ticks — and
+    /// only then are the three Keese committed to slots. Six ticks is double
+    /// the measured delay, and a room that really is empty still terminates
+    /// once the window closes.
+    static let spawnGraceTicks = 6
 
     /// Frames per decision while walking onto a pickup. Shorter than a combat
     /// tick because overshooting an item by half a tile means orbiting it.
@@ -100,7 +122,8 @@ enum ClearRoom {
         verbose: Bool = false
     ) -> Outcome {
         var outcome = Outcome()
-        var emptyTicks = 0
+        var monitor = RoomClearMonitor(
+            confirmTicks: clearConfirmTicks, spawnGraceTicks: spawnGraceTicks)
         var retreating = 0
         var lastHealth = health(nes)
 
@@ -110,13 +133,17 @@ enum ClearRoom {
             let (_, enemies, items) = Entities.classify(
                 oam: nes.ppu.oam, linkX: linkX, linkY: linkY)
 
+            // The authoritative count. `enemies` above is only ever used to
+            // decide where to swing.
+            let liveEnemies = Zelda.liveEnemyCount(in: nes)
+
             // Health reaching zero means the death animation and then the
             // game-over menu, where these inputs mean something entirely
             // different. Stop rather than flail at it.
             let currentHealth = health(nes)
             if currentHealth == 0 {
                 outcome.died = true
-                outcome.remaining = enemies.count
+                outcome.remaining = liveEnemies
                 return outcome
             }
             if currentHealth < lastHealth {
@@ -125,11 +152,13 @@ enum ClearRoom {
             }
             lastHealth = currentHealth
 
-            if enemies.isEmpty {
+            if liveEnemies == 0 {
                 // Collect anything the fight dropped before declaring victory:
                 // a key on the floor is the whole point of clearing the room.
+                // Deliberately not an observation — walking to a key must not
+                // count towards the room being confirmed clear, or the loop
+                // returns while the key is still on the floor.
                 if let item = nearest(to: linkX, linkY, among: items) {
-                    emptyTicks = 0
                     outcome.pickups += 1
                     let dx = item.centre.x - (linkX + 8)
                     let dy = item.centre.y - (linkY + 8)
@@ -155,8 +184,7 @@ enum ClearRoom {
                     continue
                 }
 
-                emptyTicks += 1
-                if emptyTicks >= clearConfirmTicks {
+                if monitor.observe(liveEnemies: 0) {
                     outcome.cleared = true
                     return outcome
                 }
@@ -167,9 +195,26 @@ enum ClearRoom {
                 }
                 continue
             }
-            emptyTicks = 0
+            monitor.observe(liveEnemies: liveEnemies)
 
-            guard let target = nearest(to: linkX, linkY, among: enemies) else { continue }
+            // The game has enemies in slots that it has not drawn yet, so there
+            // is nothing to aim at. Step a tick and look again — returning
+            // straight to the top without advancing time would spin forever,
+            // which is exactly what this loop did the first time the count
+            // stopped coming from OAM.
+            guard let target = nearest(to: linkX, linkY, among: enemies) else {
+                if verbose {
+                    print(String(
+                        format: "  f%-5d %d live, none drawn yet — waiting",
+                        outcome.frames, liveEnemies))
+                }
+                nes.controller1.releaseAll()
+                for _ in 0..<tickFrames {
+                    nes.stepFrame()
+                    outcome.frames += 1
+                }
+                continue
+            }
 
             let dx = target.centre.x - (linkX + 8)
             let dy = target.centre.y - (linkY + 8)
@@ -197,9 +242,9 @@ enum ClearRoom {
 
             if verbose {
                 print(String(
-                    format: "  f%-5d link ($%02X,$%02X)  hp %3d  %d actors  d=(%+d,%+d) %@",
-                    outcome.frames, linkX, linkY, currentHealth, enemies.count,
-                    dx, dy, action))
+                    format: "  f%-5d link ($%02X,$%02X)  hp %3d  %d live/%d drawn  d=(%+d,%+d) %@",
+                    outcome.frames, linkX, linkY, currentHealth, liveEnemies,
+                    enemies.count, dx, dy, action))
             }
 
             nes.controller1.releaseAll()
@@ -215,10 +260,7 @@ enum ClearRoom {
             outcome.frames += 1
         }
 
-        let linkX = Int(nes.cpuRead(0x0070))
-        let linkY = Int(nes.cpuRead(0x0084))
-        outcome.remaining = Entities.classify(
-            oam: nes.ppu.oam, linkX: linkX, linkY: linkY).enemies.count
+        outcome.remaining = Zelda.liveEnemyCount(in: nes)
         return outcome
     }
 }

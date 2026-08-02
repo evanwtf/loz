@@ -57,19 +57,42 @@ immediately in combat, because enemies move. Standing in a corner swinging
 killed one Keese and then waited out ninety swings while the other two drifted
 to the far wall; a fixed script has no way to notice that.
 
-`clearroom` closes the loop. Every eight frames it reads OAM, walks at the
-nearest actor, and swings when in range:
+`clearroom` closes the loop. Every eight frames it walks at the nearest actor
+and swings when in range:
 
 ```sh
 swift run -c release nesrun clearroom zelda.nes \
   --load-state /tmp/r72.state --input "left:40" --save-state /tmp/cleared.state
-# CLEARED in 252 frames, 5 swings, 24 pickups, 0 enemies left  screen $72
+# CLEARED in 350 frames, 6 swings, 14 pickups, 1 hits taken, 0 enemies left  screen $72
 ```
 
 Compare that with the blind version: 90 swings for one kill, and a second
 attempt that got Link killed.
 
-Two distinctions the loop depends on, both learned the hard way:
+### Two sources, two questions
+
+The loop reads RAM and OAM for different things, and mixing them up is a bug:
+
+| Question | Source | Why not the other one |
+|---|---|---|
+| How many enemies are left? | `enemyTypes` (`$0350`) | OAM undercounts — see below |
+| Where do I swing? | OAM | The slot table has type, not position |
+
+**OAM undercounts a room.** In Level 1 room `$63`, `oam` reported two Stalfos
+while `$0350-$0352` held three: the third was live but had not been drawn yet.
+Across one full run of that room the two disagreed on 8 of 29 decision ticks.
+Counting sprites can therefore end a fight early, which is why the termination
+test reads the slot table.
+
+The opposite risk comes with it. The slot table is *empty* for about 24 frames
+after a room loads, so a loop that trusted its first reading would call every
+room clear on arrival. `RoomClearMonitor` handles both directions: it waits out
+a spawn grace before an empty table is allowed to mean "there were never any",
+and requires six consecutive empty ticks before declaring a clear. An enemy the
+game knows about but has not drawn cannot be aimed at, so the loop simply waits
+a tick for it to appear.
+
+Two further distinctions the loop depends on, both learned the hard way:
 
 - **Status bar sprites are not actors.** Hearts and item icons live above the
   playfield and were being targeted as enemies.

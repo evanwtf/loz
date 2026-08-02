@@ -27,7 +27,7 @@ dungeon — with sound.
 | Agent harness | Scripted input, PNG capture, snapshots, pathfinding, tracing |
 | Decompilation | 5 routines native and verified; the loop is proven |
 
-184 tests across 17 suites. CI green on a self-hosted macOS runner.
+199 tests across 19 suites. CI green on a self-hosted macOS runner.
 
 ## You must supply the ROM
 

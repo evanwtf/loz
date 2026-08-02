@@ -51,8 +51,10 @@ func usage() -> Never {
                --verbose            Report each screen as it is explored.
     
       clearroom Fight everything in the current room until it is empty, then
-               collect what dropped. Closed loop over OAM, not a fixed script:
-               enemies move, so a replayed script cannot follow them.
+               collect what dropped. A closed loop, not a fixed script: enemies
+               move, so a replayed script cannot follow them. Counts what is
+               left from the enemy slot table at $0350 (OAM undercounts a room
+               it has not drawn yet) and aims from OAM.
                --load-state <file>  Snapshot to start from (required).
                --input <script>     Input to run first, e.g. to step in a door.
                --max-frames <n>     Give-up limit (default 3600).
