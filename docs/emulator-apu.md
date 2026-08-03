@@ -198,6 +198,20 @@ See [agent-harness.md](agent-harness.md).
 APU produces less than 95% or more than 105% of the samples five seconds of game
 time should yield. See [macos-app.md](macos-app.md).
 
+## The sample rate is not a constant
+
+`APU.init(sampleRate:)` derives `cyclesPerSample` from it, so the rate decides
+how many samples a frame produces. It must be whatever the audio hardware
+actually wants, not a chosen default.
+
+An Apple TV over HDMI runs at 48 kHz. Generating 44.1 kHz into it produced 735
+samples a frame where 800 were consumed — a permanent 8% deficit that no buffer
+absorbs. The ring drained and repeated its last sample, which sounds like the
+music dragging rather than like an underrun.
+
+`AudioOutput.hardwareSampleRate()` asks the session and the host passes the
+answer to both the APU and the engine. See [gotchas.md](gotchas.md).
+
 ## Known simplifications
 
 - **No cycle-exact register write timing.** Writes take effect at the

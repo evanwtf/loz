@@ -113,7 +113,7 @@ Apps/          ZeldaiOS / ZeldatvOS Xcode projects — thin shells, scheme "Zeld
 Tests/         NESCoreTests, NESAnalysisTests, NESPlayerTests, ZeldaGameTests
 docs/          architecture, decompilation, agent-harness, testing, adding-a-game,
                rom-format, rom-free, emulator-{cpu,ppu,apu,mappers},
-               {ios,macos}-app, distribution; README.md is the index,
+               {ios,macos}-app, distribution, gotchas; README.md is the index,
                scripts/ holds the route chain, and issues/ is the roadmap —
                the tracker lives in the repository, not on a server
 Reference/     first-quest overworld map PNG for `nesrun mapcheck` — gitignored
@@ -197,7 +197,11 @@ Reference/     first-quest overworld map PNG for `nesrun mapcheck` — gitignore
   arbitrary code execution with a copyrighted file next to it.
 - Never remove the `unsafeFlags` on `NESCore` in `Package.swift` (`-Ounchecked`
   in release, `-O` in **debug** too): at `-Onone` the interpreter runs ~15 fps
-  and looks broken; optimised it holds 60.
+  and looks broken; optimised it holds 60. Note the two are not equivalent
+  either — `-Ounchecked` drops bounds and overflow checks, which an interpreter
+  pays on every memory access, and it is worth **3.5x** (measured: 163 vs 565
+  fps of headroom). A debug build is playable on a phone and not on an Apple TV.
+  See `docs/gotchas.md`.
 - Never let a hand-written source file reference `ZeldaROMData`. It is generated
   and gitignored, so a direct reference makes a clean checkout fail to compile —
   which broke CI exactly once. The generator (`Sources/nesrun/EmbedROM.swift`)

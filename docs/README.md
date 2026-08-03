@@ -28,6 +28,7 @@
 | [ios-app.md](ios-app.md) | The iPhone app: layout, controls, audio, saves, diagnostics |
 | [macos-app.md](macos-app.md) | `zeldamac` and its self-test; the tvOS target's status |
 | [distribution.md](distribution.md) | Getting a build onto a device, and why not TestFlight |
+| [gotchas.md](gotchas.md) | Things that cost real time, and the measurement that settled each |
 
 ## Issue archive
 
