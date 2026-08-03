@@ -70,7 +70,7 @@ public final class SaveSync {
         }
     }
 
-    public enum Resolution: Equatable {
+    public enum Resolution: Equatable, Sendable {
         /// Neither side has anything worth loading.
         case noSave
         /// Keep what is on this device.
@@ -100,7 +100,7 @@ public final class SaveSync {
     /// nobody should lose a game because they signed out — but it leaves "is
     /// syncing actually working?" with no answer short of buying a second
     /// device.
-    public enum CloudStatus: String {
+    public enum CloudStatus: String, Sendable {
         /// Syncing was never asked for; this build is local-only.
         case off
         /// No iCloud account, or the app is signed without the entitlement.

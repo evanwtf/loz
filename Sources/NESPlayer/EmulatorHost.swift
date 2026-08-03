@@ -154,6 +154,20 @@ public final class EmulatorHost: ObservableObject {
     /// closed the app, as opposed to where the *game* thinks they are.
     private let snapshotSync: SaveSync?
 
+    /// What the launch found, for the interstitial to report.
+    ///
+    /// Deliberately not `@Published`: it is written once during `init` and read
+    /// once afterwards. A published property's `didSet` fires *during*
+    /// initialisation, which is how a previous version of this class started
+    /// the audio engine twelve times per test run.
+    public private(set) var saveReport: SaveReport?
+
+    /// Scratch state so `init` can assemble the report from what the two load
+    /// steps found, without either of them returning a tuple nobody else wants.
+    private var batteryResolution: SaveSync.Resolution = .noSave
+    private var remoteAtLoad: SaveSync.Version?
+    private var tookCloudSnapshot = false
+
     private let autoResumeURL: URL?
     private var framesSinceAutoResume = 0
 
@@ -189,7 +203,8 @@ public final class EmulatorHost: ObservableObject {
         romData: [UInt8],
         saveURL: URL? = nil,
         saveSync: SaveSync? = nil,
-        snapshotSync: SaveSync? = nil
+        snapshotSync: SaveSync? = nil,
+        cloudGate: CloudGate.Outcome = .unavailable
     ) throws {
         let cartridge = try Cartridge(data: romData)
         try G.validate(romData: romData, cartridge: cartridge)
@@ -218,8 +233,15 @@ public final class EmulatorHost: ObservableObject {
         """)
 
         loadBatterySave()
-        restoreAutoResume()
+        let resumedFromCloud = restoreAutoResume() && tookCloudSnapshot
         renderCurrentFrame()
+
+        saveReport = SaveReport(
+            gate: cloudGate,
+            cloud: SaveSync.status(of: self.saveSync, holding: remoteAtLoad),
+            battery: batteryResolution,
+            snapshotFromCloud: resumedFromCloud)
+        remoteAtLoad = nil
     }
 
     // MARK: Auto-resume
@@ -250,6 +272,7 @@ public final class EmulatorHost: ObservableObject {
                 remote: remote.modified)
             if choice == .useRemote {
                 state = remoteState
+                tookCloudSnapshot = true
                 Log.state.notice("auto-resume: taking the iCloud snapshot")
             }
         }
@@ -536,6 +559,8 @@ public final class EmulatorHost: ObservableObject {
         let remote = saveSync?.read()
         let resolution = SaveSync.resolve(
             local: local, remote: remote, expectedSize: expected)
+        batteryResolution = resolution
+        remoteAtLoad = remote
 
         switch resolution {
         case .noSave:
@@ -580,10 +605,16 @@ public final class EmulatorHost: ObservableObject {
     /// Separate from the initialiser's defaults on purpose, so that reaching
     /// iCloud is something a caller asks for rather than something that
     /// happens to anyone who constructs a host.
-    public static func cloudSyncing() -> (save: SaveSync, snapshot: SaveSync) {
+    /// The store and key come back too, so a caller can let iCloud settle
+    /// before the host reads it — see `CloudGate`.
+    public static func cloudSyncing()
+        -> (save: SaveSync, snapshot: SaveSync, store: KeyValueStore, batteryKey: String)
+    {
         let store = UbiquitousKeyValueStore()
-        return (SaveSync(store: store, key: "battery-save"),
-                SaveSync(store: store, key: "auto-resume"))
+        let batteryKey = "battery-save"
+        return (SaveSync(store: store, key: batteryKey),
+                SaveSync(store: store, key: "auto-resume"),
+                store, batteryKey)
     }
 
     /// Default save location inside the app's Application Support directory.
