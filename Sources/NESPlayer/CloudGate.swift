@@ -43,23 +43,29 @@ public final class CloudGate {
     }
 
     private let store: KeyValueStore
-    private let center: NotificationCenter
-    private let notification: Notification.Name
+    private let pollInterval: Duration
 
-    /// The notification and centre are injected so tests can post a delivery
-    /// rather than owning an iCloud account.
-    public init(
-        store: KeyValueStore,
-        center: NotificationCenter = .default,
-        notification: Notification.Name = NSUbiquitousKeyValueStore
-            .didChangeExternallyNotification
-    ) {
+    /// The interval is injected so tests need not wait in real time.
+    public init(store: KeyValueStore, pollInterval: Duration = .milliseconds(150)) {
         self.store = store
-        self.center = center
-        self.notification = notification
+        self.pollInterval = pollInterval
     }
 
     /// Waits for `key` to arrive from iCloud, up to `timeout`.
+    ///
+    /// Polls rather than observing `didChangeExternallyNotification`, which
+    /// looks like the obvious mechanism and is the wrong one here. There is a
+    /// window between the `synchronize()` below and any observer being
+    /// attached, and a delivery landing in it is missed completely — after
+    /// which the gate waits out its whole timeout with the save already sitting
+    /// in the store. Asking the store directly cannot miss anything, whenever
+    /// it arrives.
+    ///
+    /// The notification only ever saved one poll interval, and the first
+    /// version of this cost far more than it saved: the observer race made a
+    /// test hang for its full timeout, which starved an unrelated
+    /// utility-priority write and failed a different suite. One flake, two
+    /// symptoms, and neither pointed here.
     public func wait(forKey key: String, timeout: Duration) async -> Outcome {
         guard store.isAvailable else { return .unavailable }
 
@@ -69,23 +75,12 @@ public final class CloudGate {
         store.synchronize()
         if store.data(forKey: key) != nil { return .cached }
 
-        let center = center
-        let notification = notification
-        return await withTaskGroup(of: Outcome.self) { group in
-            group.addTask {
-                for await _ in center.notifications(named: notification) { break }
-                return .delivered
-            }
-            group.addTask {
-                try? await Task.sleep(for: timeout)
-                return .timedOut
-            }
-            // Whichever lands first is the answer; cancelling the other is
-            // what keeps a delivery from being reported as a timeout too.
-            let outcome = await group.next() ?? .timedOut
-            group.cancelAll()
-            return outcome
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            try? await Task.sleep(for: pollInterval)
+            if store.data(forKey: key) != nil { return .delivered }
         }
+        return .timedOut
     }
 }
 

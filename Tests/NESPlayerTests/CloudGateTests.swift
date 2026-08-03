@@ -15,11 +15,10 @@ import Testing
 @Suite("Cloud gate")
 struct CloudGateTests {
     private let key = "battery-save"
-    private let name = Notification.Name("test.kvstore.changed")
 
     @MainActor
-    private func gate(_ store: FakeKeyValueStore, _ center: NotificationCenter) -> CloudGate {
-        CloudGate(store: store, center: center, notification: name)
+    private func gate(_ store: FakeKeyValueStore) -> CloudGate {
+        CloudGate(store: store, pollInterval: .milliseconds(10))
     }
 
     /// Nothing will ever arrive, so waiting would be pure delay.
@@ -28,7 +27,7 @@ struct CloudGateTests {
     func unavailableReturnsAtOnce() async {
         let store = FakeKeyValueStore()
         store.available = false
-        let outcome = await gate(store, NotificationCenter())
+        let outcome = await gate(store)
             .wait(forKey: key, timeout: .seconds(30))
         #expect(outcome == .unavailable)
         #expect(outcome.waited == false)
@@ -41,7 +40,7 @@ struct CloudGateTests {
     func cachedReturnsAtOnce() async {
         let store = FakeKeyValueStore()
         store.set(Data([1, 2, 3]), forKey: key)
-        let outcome = await gate(store, NotificationCenter())
+        let outcome = await gate(store)
             .wait(forKey: key, timeout: .seconds(30))
         #expect(outcome == .cached)
         #expect(outcome.waited == false)
@@ -52,7 +51,7 @@ struct CloudGateTests {
     @MainActor
     func synchronizesBeforeWaiting() async {
         let store = FakeKeyValueStore()
-        _ = await gate(store, NotificationCenter())
+        _ = await gate(store)
             .wait(forKey: key, timeout: .milliseconds(20))
         #expect(store.synchronizeCount >= 1)
     }
@@ -60,32 +59,66 @@ struct CloudGateTests {
     @Test("Nothing arriving times out rather than hanging")
     @MainActor
     func timesOut() async {
-        let outcome = await gate(FakeKeyValueStore(), NotificationCenter())
+        let outcome = await gate(FakeKeyValueStore())
             .wait(forKey: key, timeout: .milliseconds(50))
         #expect(outcome == .timedOut)
     }
 
     /// The case the gate exists for.
-    @Test("A delivery while waiting is reported, and ends the wait early")
+    ///
+    /// Arrival is expressed as "the store starts answering on the third read"
+    /// rather than as a sleep followed by a write, so nothing here depends on
+    /// timing. The previous version did, and it cost more than it tested: it
+    /// raced an observer's attach, and when it lost, the gate ran its full
+    /// timeout — which showed up as a suite that occasionally took four times
+    /// as long and failed *a different test*, because the stall starved an
+    /// unrelated utility-priority write. One flake, two symptoms, neither
+    /// pointing here.
+    @Test("A save arriving while waiting is reported, and ends the wait early")
     @MainActor
     func deliveryWins() async {
-        let center = NotificationCenter()
-        let store = FakeKeyValueStore()
+        // Read 1 is the "already cached?" check and must miss, or this would
+        // be testing `.cached` by accident.
+        let store = ArrivingStore(payload: Data([1, 2, 3]), afterReads: 2)
 
-        let waiting = Task { @MainActor in
-            await gate(store, center).wait(forKey: key, timeout: .seconds(30))
-        }
-        // Let the observer attach before posting, otherwise the notification
-        // is delivered to nobody and this passes only by timing out.
-        try? await Task.sleep(for: .milliseconds(100))
-        center.post(name: name, object: nil)
+        let outcome = await CloudGate(store: store, pollInterval: .milliseconds(10))
+            .wait(forKey: key, timeout: .seconds(20))
 
-        let started = ContinuousClock.now
-        let outcome = await waiting.value
+        // `.delivered` is itself the proof that it woke on the arrival: a wait
+        // that ran its course reports `.timedOut`, and one that never waited
+        // reports `.cached`.
+        //
+        // Deliberately no elapsed-time bound. `CloudGate` is main-actor
+        // isolated and sibling suites block that actor with synchronous tick()
+        // loops, so wall-clock here measures the machine rather than the code —
+        // a 20 ms wait was observed taking 10.6 s under a full parallel run.
         #expect(outcome == .delivered)
-        // Proves it woke on the notification rather than the 30s timeout.
-        #expect(ContinuousClock.now - started < .seconds(5))
     }
+}
+
+/// A store that has nothing until it has been asked a few times, standing in
+/// for iCloud handing the save over partway through a wait.
+private final class ArrivingStore: KeyValueStore {
+    private let payload: Data
+    private let afterReads: Int
+    private var reads = 0
+
+    var isAvailable = true
+
+    init(payload: Data, afterReads: Int) {
+        self.payload = payload
+        self.afterReads = afterReads
+    }
+
+    func data(forKey _: String) -> Data? {
+        reads += 1
+        return reads > afterReads ? payload : nil
+    }
+
+    func set(_: Data, forKey _: String) {}
+
+    @discardableResult
+    func synchronize() -> Bool { isAvailable }
 }
 
 /// What the interstitial tells the player.

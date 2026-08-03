@@ -29,9 +29,32 @@ enum TestGame: GameDefinition {
     }()
 }
 
+/// The same cartridge under a second name, for suites that build a host but do
+/// not care about snapshots.
+///
+/// Sharing one name is what made this suite flaky. `EmulatorHost` derives the
+/// auto-resume path from `romResourceName`, so one name means one file in
+/// Application Support — and suites run in **parallel**. `SilentByDefaultTests`
+/// constructing a host would create and clear that file underneath the tests
+/// here, which failed about half the time with a snapshot that had vanished
+/// between being written and being read.
+///
+/// The existing per-run UUID only ever guarded against *separate processes*
+/// colliding, which was never the problem.
+enum SilentTestGame: GameDefinition {
+    static let title = "Silent Test Game"
+    static let romResourceName = "loz-silent-\(UUID().uuidString.prefix(8))"
+    static let expectedMapper = 0
+    static let expectedROMHash = ROMHash.hex(of: TestGame.romImage)
+}
+
 /// Auto-resume is what makes this playable in the gaps of a day: the app should
 /// come back exactly where it was, without the player having chosen to save.
-@Suite("Auto-resume")
+///
+/// Serialised because every test here shares one snapshot file: some write it,
+/// `bootsCleanWithoutSnapshot` deletes it first thing, and in parallel that
+/// deletion lands between another test writing the file and reading it back.
+@Suite("Auto-resume", .serialized)
 @MainActor
 struct AutoResumeTests {
     private func makeHost() throws -> EmulatorHost {
@@ -76,12 +99,24 @@ struct AutoResumeTests {
         let ramBefore = first.nes.ram
         first.saveAutoResume()
 
-        // The production write is detached; give it a moment to land.
-        let deadline = Date().addingTimeInterval(2)
+        // The production write is detached at *utility* priority, so under load
+        // it can be starved for a long time while the rest of the suite runs.
+        // The deadline is a safety net against hanging, not a budget: the loop
+        // exits the moment the file appears, so a generous limit costs nothing
+        // on a quiet machine and is the difference between a reliable test and
+        // one that fails whenever CI is busy.
+        //
+        // Two seconds here failed roughly one run in ten, and only ever on runs
+        // that took four times as long as usual — which is the tell that this is
+        // scheduling latency rather than a race over the file itself. The write
+        // is atomic, so the file existing means the file is complete.
+        let deadline = Date().addingTimeInterval(30)
         let url = try #require(AutoResume.url(for: TestGame.romResourceName))
         while !FileManager.default.fileExists(atPath: url.path), Date() < deadline {
             RunLoop.current.run(until: Date().addingTimeInterval(0.05))
         }
+        #expect(FileManager.default.fileExists(atPath: url.path),
+                "the snapshot never landed; the assertions below would blame restore")
 
         // A brand new host must land in the same place, not at power-on.
         let second = try makeHost()

@@ -19,10 +19,8 @@ import Testing
 @Suite("Silent when headless")
 @MainActor
 struct SilentByDefaultTests {
-    /// Reuses the synthetic cartridge the auto-resume tests already define, so
-    /// this needs no ROM and there is only one test game to keep working.
     private func host() throws -> EmulatorHost {
-        try EmulatorHost(game: TestGame.self, romData: TestGame.romImage)
+        try EmulatorHost(game: SilentTestGame.self, romData: TestGame.romImage)
     }
 
     @Test("Constructing a host does not open the audio device")
