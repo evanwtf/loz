@@ -122,6 +122,30 @@ One cosmetic note: the picture sits 120 px lower in its container than a centred
 layout would put it. Invisible in practice — black on black — and left alone
 rather than "fixed" on a guess.
 
+### The icon is generated, not drawn
+
+tvOS cannot reuse the iOS icon file. Its home-screen icon is a **layered**
+image at 5:3 — the system parallaxes the layers as focus moves — and it also
+wants two top-shelf banners at a third aspect ratio. One square PNG has to
+become eleven images at four aspect ratios.
+
+`Tools/tvos-icon.py` derives them all from
+`Apps/ZeldaiOS/.../icon-1024.png`, and does it by decomposition rather than by
+resampling, because every tvOS size is a fractional multiple of 1024 and the
+artwork is pixel art — scaling it directly turns hard edges to mush. The source
+is only two things: a 13x16 sprite magnified 48x at origin (200, 108), and a
+vertical gradient behind it. Each is regenerated at the target size, the sprite
+re-magnified by a whole-number factor so it stays crisp.
+
+The split needs no tuning. The four sprite colours have a maximum channel of
+155 or more and no background pixel exceeds 27, so any threshold between them
+recovers the same mask. That the sprite comes out as its own layer is also what
+tvOS wants: sprite in front, gradient behind.
+
+Re-run the script after changing the iOS icon; it rewrites the catalog whole.
+It needs Pillow, which is a dev-machine convenience and not a package
+dependency.
+
 Saves are the part that needed real work, and it is not a tvOS quirk but a tvOS
 *rule*: an Apple TV gives an app no guaranteed persistent local storage, so a
 quest kept only in the Documents directory can be evicted whenever the system

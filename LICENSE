@@ -28,7 +28,10 @@ image, no save data, and no extracted game assets, and the build produces none
 derived from Nintendo's work and are not the author's to license:
 
   - Apps/ZeldaiOS/Assets.xcassets/AppIcon.appiconset/icon-1024.png
-    The app icon, drawn from a character sprite.
+  - Apps/ZeldatvOS/Assets.xcassets/
+    The app icon, drawn from a character sprite. The tvOS brand assets are
+    the same artwork re-cut for that platform's icon and top-shelf sizes by
+    Tools/tvos-icon.py, which is itself covered by the grant.
 
   - Sources/ZeldaGame/
     Routines converted from the game's 6502 machine code to Swift, and the
