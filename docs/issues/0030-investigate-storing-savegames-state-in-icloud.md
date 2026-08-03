@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **State** | open |
+| **State** | implemented |
 | **Labels** | — |
 | **Opened** | 2026-08-02 |
 | **Closed** | — |
@@ -56,3 +56,48 @@ So before any of this gets built: are you on the paid program? If not, this is b
 ## One note on content
 
 A `.state` snapshot embeds CHR-RAM, which is cartridge data. Putting it in the user's own iCloud account is not distribution and does not implicate anything in `LICENSE` — but it is another reason to prefer syncing the `.sav`, which is purely the player's own progress, over the snapshots, which are partly the game.
+
+
+---
+
+## Resolution
+
+Implemented. Cartridge battery saves sync through `NSUbiquitousKeyValueStore`.
+
+**What syncs:** the `.sav` only — 8 KB of `prgRAM`, which *is* the quest
+progress (three slots, inventory, dungeons cleared). Snapshots stay local: at
+~61 KB each they are blob-shaped for a key-value store, and a mid-fight moment
+from a phone is an odd thing to resume on a television.
+
+**Why key-value and not CloudKit or a document container:** 8 KB against a 1 MB
+budget, identical API on iOS, macOS and tvOS, and no file coordination to get
+wrong.
+
+**The identifier is pinned, not derived.** The entitlement names
+`$(TeamIdentifierPrefix)wtf.evan.loz.zelda` on *both* targets rather than
+`$(CFBundleIdentifier)`. The Apple TV bundle is `wtf.evan.loz.zelda.tv`, so
+deriving it would have given the two apps separate stores — they would have
+synced perfectly and never seen each other, which is the entire point.
+
+**Conflict rules.** Newer wins, with two exceptions, because the cost of being
+wrong is one-sided — a needless local save costs nothing and a needless
+overwrite costs a quest:
+
+- An all-zero save never beats a non-empty one however new it looks. That is
+  what a cartridge reads as before anyone has played, so a freshly installed
+  device would otherwise push "no progress" over a finished game on launch.
+- A wrong-sized payload is refused outright rather than handed to the emulator.
+
+There is also a five-second clock tolerance: without one, two devices whose
+clocks differ by a second trade the save back and forth on every launch.
+
+**Degrades quietly.** No iCloud account or no entitlement means local-only
+saves, not an error the player can do anything about.
+
+Verified on device: the entitlement signs in as
+`94S5PZTVPY.wtf.evan.loz.zelda`. 14 tests cover the resolution rules through a
+fake store, so they need no account, entitlement or network.
+
+Unblocks [#2](0002-tvos-app-target-for-apple-tv.md) — tvOS gives an app no
+guaranteed persistent local storage, so a quest kept only in its Documents
+directory can be evicted whenever the system wants space.

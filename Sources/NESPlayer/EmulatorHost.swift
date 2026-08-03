@@ -146,6 +146,10 @@ public final class EmulatorHost: ObservableObject {
     private let saveURL: URL?
     private var framesSinceSaveCheck = 0
 
+    /// Syncs the cartridge battery save across devices, when iCloud is
+    /// available. Nil disables syncing entirely and leaves saves local.
+    private let saveSync: SaveSync?
+
     private let autoResumeURL: URL?
     private var framesSinceAutoResume = 0
 
@@ -166,10 +170,14 @@ public final class EmulatorHost: ObservableObject {
     ///   - game: the single game this app plays.
     ///   - romData: raw iNES image, validated against the game's expected hash.
     ///   - saveURL: where battery-backed RAM is persisted, if the cart has any.
+    ///   - saveSync: cross-device save syncing. Defaults to iCloud's key-value
+    ///     store; pass nil for local-only saves.
     public init<G: GameDefinition>(
         game _: G.Type,
         romData: [UInt8],
-        saveURL: URL? = nil
+        saveURL: URL? = nil,
+        saveSync: SaveSync? = SaveSync(
+            store: UbiquitousKeyValueStore(), key: "battery-save")
     ) throws {
         let cartridge = try Cartridge(data: romData)
         try G.validate(romData: romData, cartridge: cartridge)
@@ -182,6 +190,7 @@ public final class EmulatorHost: ObservableObject {
         romHash = G.expectedROMHash
         gameName = G.romResourceName
         self.saveURL = cartridge.hasBattery ? saveURL : nil
+        self.saveSync = cartridge.hasBattery ? saveSync : nil
         autoResumeURL = AutoResume.url(for: G.romResourceName)
         isMuted = LaunchOptions.startMuted
 
@@ -439,16 +448,58 @@ public final class EmulatorHost: ObservableObject {
 
     // MARK: Battery save
 
+    /// Loads the quest, preferring whichever copy is newer — this device's or
+    /// the one in iCloud.
+    ///
+    /// The local file is always written, even when the cloud copy wins, so the
+    /// device is never left depending on the network to know where the player
+    /// got to.
     private func loadBatterySave() {
-        guard let saveURL, let data = try? Data(contentsOf: saveURL) else { return }
-        let bytes = [UInt8](data)
-        guard bytes.count == nes.cartridge.prgRAM.count else { return }
-        nes.cartridge.prgRAM = bytes
+        let expected = nes.cartridge.prgRAM.count
+
+        var local: SaveSync.Version?
+        if let saveURL,
+           let data = try? Data(contentsOf: saveURL),
+           let modified = (try? FileManager.default.attributesOfItem(atPath: saveURL.path))?[
+               .modificationDate] as? Date
+        {
+            local = SaveSync.Version(data: [UInt8](data), modified: modified)
+        }
+
+        let remote = saveSync?.read()
+        let resolution = SaveSync.resolve(
+            local: local, remote: remote, expectedSize: expected)
+
+        switch resolution {
+        case .noSave:
+            return
+        case .useLocal, .noChange:
+            if let local { nes.cartridge.prgRAM = local.data }
+            // Seed the cloud from a device that has progress and it does not.
+            if remote == nil, let local, !local.data.allSatisfy({ $0 == 0 }) {
+                saveSync?.write(local.data, modified: local.modified)
+            }
+        case .useRemote:
+            guard let remote else { return }
+            nes.cartridge.prgRAM = remote.data
+            if let saveURL {
+                try? Data(remote.data).write(to: saveURL, options: .atomic)
+            }
+        }
+
+        let verdict = String(describing: resolution)
+        Log.state.notice("battery save: \(verdict, privacy: .public)")
     }
 
     public func saveBatterySave() {
+        let bytes = nes.cartridge.prgRAM
         guard let saveURL else { return }
-        try? Data(nes.cartridge.prgRAM).write(to: saveURL, options: .atomic)
+        try? Data(bytes).write(to: saveURL, options: .atomic)
+
+        // Pushed on every save rather than only on backgrounding: a save is
+        // already a deliberate, infrequent act — the game writes battery RAM
+        // when the player saves or dies, not per frame.
+        saveSync?.write(bytes, modified: Date())
     }
 
     /// Default save location inside the app's Application Support directory.
