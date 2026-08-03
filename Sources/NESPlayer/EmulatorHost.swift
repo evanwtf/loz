@@ -154,7 +154,7 @@ public final class EmulatorHost: ObservableObject {
     /// closed the app, as opposed to where the *game* thinks they are.
     private let snapshotSync: SaveSync?
 
-    /// What the launch found, for the interstitial to report.
+    /// What the launch found, for the iCloud loading screen to report.
     ///
     /// Deliberately not `@Published`: it is written once during `init` and read
     /// once afterwards. A published property's `didSet` fires *during*
