@@ -153,3 +153,89 @@ struct SaveSyncStoreTests {
         #expect(store.storage.isEmpty)
     }
 }
+
+/// Snapshots are the other half of "carry my game to the other device": the
+/// battery save is where the *game* thinks you are, and a snapshot is where you
+/// actually were when you closed the app — mid-room, mid-fight.
+@Suite("Snapshot sync")
+struct SnapshotSyncTests {
+    /// A snapshot is JSON full of byte arrays rendered as decimal text, so it
+    /// compresses hard. That is what makes it affordable to sync at all: 61 KB
+    /// of machine state against iCloud's 1 MB key-value budget is careless,
+    /// 13 KB is not.
+    @Test("A snapshot round-trips through compression unchanged")
+    func compressionRoundTrip() throws {
+        let json = Data("""
+        {"ram":[\(Array(repeating: "0", count: 2048).joined(separator: ","))],\
+        "cycles":123456,"romHash":"abc"}
+        """.utf8)
+
+        let squeezed = try #require(SnapshotCodec.compress([UInt8](json)))
+        let restored = try #require(SnapshotCodec.decompress(squeezed))
+
+        #expect(restored == [UInt8](json))
+        #expect(squeezed.count < json.count / 2, "should compress substantially")
+    }
+
+    @Test("Garbage does not decompress into something plausible")
+    func corruptCompressedData() {
+        #expect(SnapshotCodec.decompress([UInt8]("not compressed at all".utf8)) == nil)
+    }
+
+    @Test("An empty payload is refused rather than treated as a snapshot")
+    func emptyPayload() {
+        #expect(SnapshotCodec.decompress([]) == nil)
+    }
+
+    /// Unlike the battery save there is no all-zero hazard — a compressed
+    /// snapshot is never a run of zeros — so the newest one simply wins.
+    @Test("The newer snapshot wins")
+    func newerSnapshotWins() {
+        let here = SaveSync.Version(
+            data: [1, 2, 3], modified: Date(timeIntervalSince1970: 100))
+        let there = SaveSync.Version(
+            data: [4, 5, 6], modified: Date(timeIntervalSince1970: 400))
+        #expect(SaveSync.resolve(local: here, remote: there) == .useRemote)
+        #expect(SaveSync.resolve(local: there, remote: here) == .useLocal)
+    }
+
+    @Test("No snapshot anywhere is not an error")
+    func noSnapshot() {
+        #expect(SaveSync.resolve(local: nil, remote: nil) == .noSave)
+    }
+}
+
+/// Snapshot resolution is by time alone, and has to be — reusing the battery
+/// save's content-aware rules here was a real bug, caught before it shipped.
+@Suite("Snapshot resolution by time")
+struct SnapshotTimeResolutionTests {
+    private func date(_ o: TimeInterval) -> Date { Date(timeIntervalSince1970: 1_700_000_000 + o) }
+
+    @Test("Nothing anywhere is no snapshot")
+    func nothing() { #expect(SaveSync.resolveByTime(local: nil, remote: nil) == .noSave) }
+
+    @Test("Only local, or only remote, uses whichever exists")
+    func oneSided() {
+        #expect(SaveSync.resolveByTime(local: date(0), remote: nil) == .useLocal)
+        #expect(SaveSync.resolveByTime(local: nil, remote: date(0)) == .useRemote)
+    }
+
+    @Test("The newer snapshot wins in both directions")
+    func newerWins() {
+        #expect(SaveSync.resolveByTime(local: date(0), remote: date(600)) == .useRemote)
+        #expect(SaveSync.resolveByTime(local: date(600), remote: date(0)) == .useLocal)
+    }
+
+    /// The bug this replaced: with the content-aware rules, a local snapshot
+    /// with no bytes to compare looked "empty" and lost to the remote every
+    /// time, however old the remote was.
+    @Test("A much older remote snapshot never wins")
+    func staleRemoteLoses() {
+        #expect(SaveSync.resolveByTime(local: date(10000), remote: date(1)) == .useLocal)
+    }
+
+    @Test("A near-tie keeps the local snapshot rather than flapping")
+    func nearTie() {
+        #expect(SaveSync.resolveByTime(local: date(0), remote: date(2)) == .useLocal)
+    }
+}

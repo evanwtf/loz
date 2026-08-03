@@ -150,6 +150,10 @@ public final class EmulatorHost: ObservableObject {
     /// available. Nil disables syncing entirely and leaves saves local.
     private let saveSync: SaveSync?
 
+    /// Syncs the resume snapshot — where the player actually was when they
+    /// closed the app, as opposed to where the *game* thinks they are.
+    private let snapshotSync: SaveSync?
+
     private let autoResumeURL: URL?
     private var framesSinceAutoResume = 0
 
@@ -170,14 +174,22 @@ public final class EmulatorHost: ObservableObject {
     ///   - game: the single game this app plays.
     ///   - romData: raw iNES image, validated against the game's expected hash.
     ///   - saveURL: where battery-backed RAM is persisted, if the cart has any.
-    ///   - saveSync: cross-device save syncing. Defaults to iCloud's key-value
-    ///     store; pass nil for local-only saves.
+    ///   - saveSync: cross-device battery-save syncing, and
+    ///   - snapshotSync: cross-device resume-snapshot syncing.
+    ///
+    ///     **Both default to nil — local only — and the app opts in.** Defaulting
+    ///     them to the real iCloud store meant merely constructing a host
+    ///     reached for `NSUbiquitousKeyValueStore`, so the test suite read and
+    ///     wrote the developer's actual iCloud data and picked up intermittent
+    ///     failures from a network service it had no business touching. Same
+    ///     shape as the audio bug: a convenient default that quietly did
+    ///     something real. See `EmulatorHost.cloudSyncing()`.
     public init<G: GameDefinition>(
         game _: G.Type,
         romData: [UInt8],
         saveURL: URL? = nil,
-        saveSync: SaveSync? = SaveSync(
-            store: UbiquitousKeyValueStore(), key: "battery-save")
+        saveSync: SaveSync? = nil,
+        snapshotSync: SaveSync? = nil
     ) throws {
         let cartridge = try Cartridge(data: romData)
         try G.validate(romData: romData, cartridge: cartridge)
@@ -191,6 +203,7 @@ public final class EmulatorHost: ObservableObject {
         gameName = G.romResourceName
         self.saveURL = cartridge.hasBattery ? saveURL : nil
         self.saveSync = cartridge.hasBattery ? saveSync : nil
+        self.snapshotSync = snapshotSync
         autoResumeURL = AutoResume.url(for: G.romResourceName)
         isMuted = LaunchOptions.startMuted
 
@@ -215,10 +228,30 @@ public final class EmulatorHost: ObservableObject {
     /// stale or unreadable snapshot is not something a player can act on.
     @discardableResult
     public func restoreAutoResume() -> Bool {
-        guard autoResumeEnabled,
-              let autoResumeURL,
-              let state = AutoResume.read(from: autoResumeURL)
-        else { return false }
+        guard autoResumeEnabled, let autoResumeURL else { return false }
+
+        // Whichever snapshot is newer: this device's, or the one left by
+        // closing the app on another. Resolved only here, at launch — adopting
+        // a remote snapshot mid-session would teleport the player.
+        var state = AutoResume.read(from: autoResumeURL)
+        let localModified = (try? FileManager.default.attributesOfItem(
+            atPath: autoResumeURL.path))?[.modificationDate] as? Date
+
+        if let snapshotSync,
+           let remote = snapshotSync.read(),
+           let expanded = SnapshotCodec.decompress(remote.data),
+           let remoteState = try? JSONDecoder().decode(SaveState.self, from: Data(expanded))
+        {
+            let choice = SaveSync.resolveByTime(
+                local: state == nil ? nil : (localModified ?? .distantPast),
+                remote: remote.modified)
+            if choice == .useRemote {
+                state = remoteState
+                Log.state.notice("auto-resume: taking the iCloud snapshot")
+            }
+        }
+
+        guard let state else { return false }
 
         do {
             // The hash check refuses a snapshot from a different dump, which
@@ -234,18 +267,34 @@ public final class EmulatorHost: ObservableObject {
     }
 
     /// Snapshots the machine. Call when backgrounding, and periodically.
-    public func saveAutoResume() {
+    ///
+    /// `toCloud` is off for the periodic write and on when the app is going
+    /// away. The two writes answer different questions: the periodic one is a
+    /// crash net for *this* device and fires every twenty seconds, while the
+    /// cloud copy is "I closed the app here, let me carry on over there". A
+    /// 13 KB upload every twenty seconds would be a careless share of a 1 MB
+    /// budget shared with every other key, and iCloud throttles frequent
+    /// writers anyway.
+    public func saveAutoResume(toCloud: Bool = false) {
         guard autoResumeEnabled, let autoResumeURL else { return }
         // Capturing is a cheap array copy on the main actor; encoding and
         // writing happen off it so the frame loop never stalls on I/O.
-        AutoResume.write(nes.captureState(romHash: romHash), to: autoResumeURL)
+        let state = nes.captureState(romHash: romHash)
+        AutoResume.write(state, to: autoResumeURL)
+
+        guard toCloud, let snapshotSync else { return }
+        guard let encoded = try? JSONEncoder().encode(state),
+              let squeezed = SnapshotCodec.compress([UInt8](encoded))
+        else { return }
+        snapshotSync.write(squeezed, modified: Date())
+        Log.state.notice("auto-resume: pushed \(squeezed.count, privacy: .public) bytes to iCloud")
     }
 
     /// Everything that must be persisted before the app may be suspended or
     /// killed: cartridge battery RAM and the resume snapshot.
     public func persistForBackgrounding() {
         saveBatterySave()
-        saveAutoResume()
+        saveAutoResume(toCloud: true)
     }
 
     public func start() {
@@ -500,6 +549,18 @@ public final class EmulatorHost: ObservableObject {
         // already a deliberate, infrequent act — the game writes battery RAM
         // when the player saves or dies, not per frame.
         saveSync?.write(bytes, modified: Date())
+    }
+
+    /// The pair of syncs a shipping app wants: battery save and resume
+    /// snapshot, both through iCloud's key-value store.
+    ///
+    /// Separate from the initialiser's defaults on purpose, so that reaching
+    /// iCloud is something a caller asks for rather than something that
+    /// happens to anyone who constructs a host.
+    public static func cloudSyncing() -> (save: SaveSync, snapshot: SaveSync) {
+        let store = UbiquitousKeyValueStore()
+        return (SaveSync(store: store, key: "battery-save"),
+                SaveSync(store: store, key: "auto-resume"))
     }
 
     /// Default save location inside the app's Application Support directory.
