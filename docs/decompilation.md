@@ -99,7 +99,7 @@ nesrun play zelda.nes --load-state overworld.state \
 flat PRG offsets so it can be compared directly against the static map. Walking
 into a dungeon reveals the dungeon code, with exact bank attribution.
 
-Tracked in [#5](../../../issues/5).
+Tracked in [#5](issues/0005-trace-guided-code-discovery-merge-dynamic-coverage-with-stat.md).
 
 ## The dispatch mechanism
 
@@ -178,11 +178,11 @@ gradually stops looking like transliterated assembly.
 
 ## Order of work
 
-1. ~~**Discovery** ([#5](../../../issues/5))~~ — done: 253 routines observed
-2. ~~**Verification** ([#16](../../../issues/16))~~ — done: RoutineVerifier
-3. **Symbols** ([#6](../../../issues/6)) — so code reads `linkPositionX`, not `ram[0x70]`
-4. **Conversion** ([#7](../../../issues/7)) — bank 0 first; it is 79% code and holds the engine core
-5. **Native rendering** ([#10](../../../issues/10)) — the last emulated component to go
+1. ~~**Discovery** ([#5](issues/0005-trace-guided-code-discovery-merge-dynamic-coverage-with-stat.md))~~ — done: 253 routines observed
+2. ~~**Verification** ([#16](issues/0016-differential-test-harness-for-decompiled-routines.md))~~ — done: RoutineVerifier
+3. **Symbols** ([#6](issues/0006-map-zelda-ram-layout-and-label-routines.md)) — so code reads `linkPositionX`, not `ram[0x70]`
+4. **Conversion** ([#7](issues/0007-decompile-bank-0-engine-routines-to-swift.md)) — bank 0 first; it is 79% code and holds the engine core
+5. **Native rendering** ([#10](issues/0010-native-renderer-draw-from-game-state-instead-of-emulating-th.md)) — the last emulated component to go
 
 Steps 1–3 are prerequisites. Attempting step 4 first means decompiling
 unidentified routines with unnamed variables and no way to check the result.

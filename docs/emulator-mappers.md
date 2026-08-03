@@ -114,4 +114,4 @@ generate spurious edges and the IRQ fires on the wrong scanline — visible as a
 tearing or jittering status bar. Track dot-distance since A12 last went low
 rather than treating every rise as a clock.
 
-Tracked in [#11](../../../issues/11).
+Tracked in [#11](issues/0011-mmc3-mapper-to-support-super-mario-bros-3.md).

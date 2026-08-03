@@ -11,7 +11,7 @@ swift run nesrun info smb3.nes
 
 If the reported mapper is not implemented, add it first — see
 [emulator-mappers.md](emulator-mappers.md). SMB3 needs MMC3
-([#11](../../../issues/11)).
+([#11](issues/0011-mmc3-mapper-to-support-super-mario-bros-3.md)).
 
 ## 2. Get the ROM hash
 

@@ -114,8 +114,9 @@ Apps/          ZeldaiOS / ZeldatvOS Xcode projects — thin shells, scheme "Zeld
 Tests/         NESCoreTests, NESAnalysisTests, NESPlayerTests, ZeldaGameTests
 docs/          architecture, decompilation, agent-harness, testing, adding-a-game,
                rom-format, rom-free, emulator-{cpu,ppu,apu,mappers},
-               {ios,macos}-app, distribution; README.md is the index and
-               scripts/ holds the route chain
+               {ios,macos}-app, distribution; README.md is the index,
+               scripts/ holds the route chain, and issues/ is the roadmap —
+               the tracker lives in the repository, not on a server
 Reference/     first-quest overworld map PNG for `nesrun mapcheck` — gitignored
                and supplied locally; it is built from ripped game graphics
 ```

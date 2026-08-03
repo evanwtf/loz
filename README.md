@@ -165,7 +165,7 @@ docs/          Architecture, internals, harness guide
 ```
 
 Adding Super Mario Bros. 3 means a new `SMB3Game` target and an MMC3 mapper
-([#11](../../issues/11)) — not a fork of any of this.
+([#11](docs/issues/0011-mmc3-mapper-to-support-super-mario-bros-3.md)) — not a fork of any of this.
 
 The target cartridge is retail Zelda on an SNROM board — 128 KB PRG in 16 KB
 banks, 8 KB CHR-**RAM**, MMC1, battery-backed WRAM at `$6000`. Details in
