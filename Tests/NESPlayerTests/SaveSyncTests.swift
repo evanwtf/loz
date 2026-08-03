@@ -143,6 +143,18 @@ struct SaveSyncStoreTests {
         #expect(SaveSync(store: store, key: "zelda").read() == nil)
     }
 
+    /// The contract that replaced `ubiquityIdentityToken`: a store reports on
+    /// itself through `synchronize()`. The old check asked about iCloud Drive,
+    /// which tvOS does not have, so an Apple TV was gated out of syncing
+    /// entirely however correctly it was signed.
+    @Test("Synchronize reports whether the store is usable")
+    func synchronizeReportsAvailability() {
+        let store = FakeKeyValueStore()
+        #expect(store.synchronize())
+        store.available = false
+        #expect(store.synchronize() == false)
+    }
+
     @Test("An unavailable store neither reads nor writes")
     func unavailableStore() {
         let store = FakeKeyValueStore()
