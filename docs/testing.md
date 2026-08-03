@@ -1,6 +1,6 @@
 # Testing
 
-247 tests across 26 suites, using swift-testing. `swift test` runs in ~10s —
+261 tests across 28 suites, using swift-testing. `swift test` runs in ~10s —
 most of which is the four `Host input path` and seven `Auto-resume` tests
 sharing a ten-second budget — so there is no excuse for not running it.
 
@@ -17,7 +17,7 @@ timing.
 
 ## Suites
 
-Twenty-six suites across twenty-two files — `APUTests.swift` declares three.
+Twenty-eight suites across twenty-three files — `APUTests.swift` declares three.
 
 ### `NESCoreTests` — the emulator (156)
 
@@ -52,7 +52,7 @@ looks trivial and is not: status bar sprites became phantom targets, and a
 dropped key classified as an enemy cost 552 sword swings against an item that
 only had to be walked onto.
 
-### `NESPlayerTests` — the app shell (28)
+### `NESPlayerTests` — the app shell (42)
 
 | Suite | Tests | Guards |
 |---|---|---|
@@ -60,6 +60,8 @@ only had to be walked onto.
 | `Auto-resume` | 7 | Snapshots round-trip; foreign and corrupt ones are refused |
 | `Host input path` | 4 | A button pressed through `EmulatorHost` reaches the game |
 | `Silent when headless` | 4 | A host nobody started never opens the audio device |
+| `Save sync resolution` | 10 | Which copy of a quest wins when two devices disagree |
+| `Save sync store` | 4 | Round trip, empty and corrupt stores, unavailable iCloud |
 
 `Silent when headless` is a regression guard with an audible failure mode. Until
 it existed, running `swift test` played Zelda through the speakers — eleven

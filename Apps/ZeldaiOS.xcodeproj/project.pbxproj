@@ -211,6 +211,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				CODE_SIGN_ENTITLEMENTS = ZeldaiOS/Zelda.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = wtf.evan.loz.zelda;
 				PRODUCT_NAME = Zelda;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -241,6 +242,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				CODE_SIGN_ENTITLEMENTS = ZeldaiOS/Zelda.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = wtf.evan.loz.zelda;
 				PRODUCT_NAME = Zelda;
 				SWIFT_EMIT_LOC_STRINGS = YES;

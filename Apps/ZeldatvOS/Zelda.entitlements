@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Cartridge battery saves sync through iCloud's key-value store: 8 KB
+	     against a 1 MB budget, and the same API on iOS, macOS and tvOS.
+	     Without this entitlement the app still runs and still saves — it just
+	     keeps the quest on one device.
+
+	     The identifier is pinned rather than derived from $(CFBundleIdentifier).
+	     The Apple TV target is wtf.evan.loz.zelda.tv, so deriving it would give
+	     the two apps separate stores and they would never see each other's
+	     saves — which is the entire point of syncing them. Both targets name
+	     the phone's identifier deliberately. -->
+	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
+	<string>$(TeamIdentifierPrefix)wtf.evan.loz.zelda</string>
+</dict>
+</plist>
