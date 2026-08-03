@@ -154,6 +154,50 @@ struct SaveSyncStoreTests {
     }
 }
 
+/// Telling "syncing works, nothing saved yet" apart from "syncing is silently
+/// off".
+///
+/// Both leave the player with their local save and no visible difference, which
+/// is the right behaviour and a terrible diagnostic — a wrong entitlement or a
+/// signed-out device looks exactly like a working app. These four states are
+/// the only way to answer "is it actually reaching iCloud?" without a second
+/// device.
+@Suite("Cloud status")
+struct CloudStatusTests {
+    private func version() -> SaveSync.Version {
+        SaveSync.Version(data: [1, 2, 3], modified: Date())
+    }
+
+    @Test("No sync at all reports off, not a failure")
+    func noSync() {
+        #expect(SaveSync.status(of: nil, holding: nil) == .off)
+    }
+
+    /// The state that used to be invisible: entitlement missing or signed out.
+    @Test("An unreachable store reports unavailable even with data in hand")
+    func unavailable() {
+        let store = FakeKeyValueStore()
+        store.available = false
+        let sync = SaveSync(store: store, key: "zelda")
+        #expect(sync.isAvailable == false)
+        #expect(SaveSync.status(of: sync, holding: nil) == .unavailable)
+        #expect(SaveSync.status(of: sync, holding: version()) == .unavailable)
+    }
+
+    @Test("A reachable but empty store is distinct from an unreachable one")
+    func empty() {
+        let sync = SaveSync(store: FakeKeyValueStore(), key: "zelda")
+        #expect(sync.isAvailable)
+        #expect(SaveSync.status(of: sync, holding: nil) == .empty)
+    }
+
+    @Test("A reachable store holding a save reports present")
+    func present() {
+        let sync = SaveSync(store: FakeKeyValueStore(), key: "zelda")
+        #expect(SaveSync.status(of: sync, holding: version()) == .present)
+    }
+}
+
 /// Snapshots are the other half of "carry my game to the other device": the
 /// battery save is where the *game* thinks you are, and a snapshot is where you
 /// actually were when you closed the app — mid-room, mid-fight.

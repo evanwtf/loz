@@ -88,6 +88,36 @@ public final class SaveSync {
     /// the save back and forth on every launch, each convinced it is newer.
     public static let clockTolerance: TimeInterval = 5
 
+    /// Whether the backing store can be reached at all.
+    public var isAvailable: Bool { store.isAvailable }
+
+    /// What the cloud side of a load looked like.
+    ///
+    /// Worth naming, and worth logging, because from outside the app these
+    /// states are indistinguishable: a device with no iCloud account and a
+    /// device syncing perfectly that has nothing stored yet both just carry on
+    /// with the local file. Silent degradation is the correct *behaviour* —
+    /// nobody should lose a game because they signed out — but it leaves "is
+    /// syncing actually working?" with no answer short of buying a second
+    /// device.
+    public enum CloudStatus: String {
+        /// Syncing was never asked for; this build is local-only.
+        case off
+        /// No iCloud account, or the app is signed without the entitlement.
+        case unavailable
+        /// Reachable, but holding nothing yet.
+        case empty
+        /// Reachable, and holding a save.
+        case present
+    }
+
+    /// Describes the cloud side of a load that has already read `remote`.
+    public static func status(of sync: SaveSync?, holding remote: Version?) -> CloudStatus {
+        guard let sync else { return .off }
+        guard sync.isAvailable else { return .unavailable }
+        return remote == nil ? .empty : .present
+    }
+
     private let store: KeyValueStore
     private let key: String
 
