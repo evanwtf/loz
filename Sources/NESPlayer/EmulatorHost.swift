@@ -194,7 +194,10 @@ public final class EmulatorHost: ObservableObject {
         let cartridge = try Cartridge(data: romData)
         try G.validate(romData: romData, cartridge: cartridge)
 
-        let sampleRate = 44100.0
+        // Ask the hardware rather than assuming. The APU generates at this
+        // rate, so a mismatch is a permanent surplus or deficit of samples
+        // every frame — not something a buffer can absorb.
+        let sampleRate = AudioOutput.hardwareSampleRate()
         audio = AudioOutput(sampleRate: sampleRate)
         nes = try NES(cartridge: cartridge, sampleRate: sampleRate)
         nes.nativeRoutines = G.nativeRoutines
@@ -455,6 +458,13 @@ public final class EmulatorHost: ObservableObject {
     private func renderCurrentFrame() {
         frames.publish(FrameRenderer.image(from: nes.framebuffer))
     }
+
+    /// Samples queued for the speaker.
+    ///
+    /// Near zero while playing means the APU is not keeping up with the
+    /// hardware — which is what a sample-rate mismatch looks like from the
+    /// outside, and is otherwise invisible without attaching a debugger.
+    public var audioBuffered: Int { audio.bufferedSampleCount }
 
     /// Total samples the APU has produced since launch. Diagnostic: if this is
     /// not advancing at roughly the sample rate, audio is starving.

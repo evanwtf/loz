@@ -392,6 +392,15 @@ struct DiagnosticsOverlay: View {
                 Text("bank \(host.nes.mapper.currentPRGBank)")
                 Text(String(format: "PC $%04X", host.nes.cpu.pc))
                 Text("scanline \(host.nes.ppu.scanline)")
+                // Audio rate and how full the queue is. Together these name the
+                // fault that made the Apple TV sound like it was dragging: the
+                // APU generated 44.1 kHz into hardware that wanted 48, so the
+                // queue emptied every frame and the last sample was repeated.
+                // A rate that is not the hardware's, or a buffer sitting near
+                // zero, is that bug — visible without a Mac attached.
+                Text(String(format: "audio %.0f Hz  buf %d",
+                            host.nes.apu.sampleRate, host.audioBuffered))
+                    .foregroundStyle(host.audioBuffered < 256 ? .red : .green)
             }
             // Live pad state. "The buttons do nothing" is ambiguous between
             // the press never arriving and the game ignoring it; this splits

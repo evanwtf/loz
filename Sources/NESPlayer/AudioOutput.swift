@@ -87,9 +87,32 @@ final class AudioOutput {
     /// Samples already queued — used to keep emulation and audio in step.
     var bufferedSampleCount: Int { ring.count }
 
+    /// The sample rate the hardware actually wants.
+    ///
+    /// Not a detail: the APU derives `cyclesPerSample` from this, so it decides
+    /// how many samples a frame produces. An Apple TV over HDMI runs at 48 kHz
+    /// while this used to hardcode 44.1 — so the game generated 735 samples per
+    /// frame where the hardware consumed 800, a permanent 8% deficit. The ring
+    /// ran dry every frame, and `read()` repeats its last sample rather than
+    /// click, which sounds exactly like music dragging and stuttering.
+    ///
+    /// Generating at the hardware rate removes the mismatch at the source
+    /// rather than papering over it with a resampler.
+    static func hardwareSampleRate() -> Double {
+        #if os(iOS) || os(tvOS)
+            configureSession()
+            let rate = AVAudioSession.sharedInstance().sampleRate
+            // A session that has not settled reports 0; 44.1 kHz is the safe
+            // assumption and what every previous build used.
+            return rate > 0 ? rate : 44100
+        #else
+            return 44100
+        #endif
+    }
+
     func start() {
         guard !isRunning else { return }
-        configureSession()
+        Self.configureSession()
 
         guard let format = AVAudioFormat(
             standardFormatWithSampleRate: sampleRate, channels: 1)
@@ -140,7 +163,7 @@ final class AudioOutput {
         isRunning = false
     }
 
-    private func configureSession() {
+    private static func configureSession() {
         #if os(iOS) || os(tvOS)
             do {
                 // .playback, not .ambient. `.ambient` obeys the ring/silent
