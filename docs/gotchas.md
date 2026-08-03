@@ -50,6 +50,18 @@ frame in Debug against 5.8 ms in Release, where the budget is 16.7 ms. The
 device ran at 47 fps and the audio dragged as a consequence. An iPhone 15 Pro
 absorbs it — 8.8 ms still fits — so the same defect is invisible there.
 
+**On the device it reads as 30 fps, not 47.** `CADisplayLink` presents on
+vsync boundaries, so missing a 16.7 ms deadline does not cost a proportional
+amount — it costs the whole next frame, and the rate falls to a divisor of 60.
+That the number is exactly half is a useful signal in itself: gradual slowness
+looks like 47, and a missed deadline looks like 30.
+
+Which is why the tvOS scheme's **Run action builds Release** while iOS's stays
+Debug. Debug is a useful configuration on a phone and not on an Apple TV, so
+the platform where hitting Run cannot produce a playable build is the platform
+that should not default to it. The cost is stepping through app code on tvOS,
+which is fifteen lines — everything real is in `NESPlayer` and `NESCore`.
+
 **A wrong explanation was published before this was measured.** The first
 diagnosis was "Xcode applies its own `-Onone` to package targets", which is
 false. Both flags appear on the command line and the *last* one wins:
