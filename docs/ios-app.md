@@ -174,6 +174,41 @@ the 20-second timer — 13 KB every twenty seconds is a careless share of a 1 MB
 budget). Both use the identifier pinned in `Zelda.entitlements`, which the phone
 and the Apple TV deliberately *share* so one quest continues on the other.
 
+### The iCloud loading screen
+
+Shown at launch while the save is fetched, then held so the outcome can be read:
+a symbol, a headline, one sentence of what it means, and a countdown. **Ten
+seconds total, and any input skips it** — a key, a tap, or any button on any
+controller. There is a toggle for it in the game menu.
+
+The copy is deliberately written for someone who does not know what a key-value
+store is, because the person staring at an empty file screen wants to know
+where their game went, not how it is stored. `SaveReport` picks one of seven
+states and each says what it means for the *saved game*:
+
+| Situation | Headline |
+|---|---|
+| No syncing in this build | Saved games stay on this device |
+| Cannot reach iCloud | Can't reach iCloud |
+| Adopted the cloud save | Saved game loaded from iCloud |
+| Adopted a cloud snapshot | Picking up where you left off |
+| Reachable, nothing stored | Connected to iCloud |
+| Reachable, no local save | Connected to iCloud |
+| Everything agrees | Saved games are up to date |
+
+Only "Can't reach iCloud" is coloured as a warning, and it is the only one that
+tells the player what to do (check they are signed in). Having no saves yet is
+not a fault, and colouring it like one would alarm a new player.
+
+The screen closes at the later of *ten seconds after launch* and *three seconds
+after there was an answer*. Without the second clause a slow check would eat
+the whole budget and leave the outcome up for a moment — long enough to notice,
+not long enough to read.
+
+A test asserts none of this copy contains implementation vocabulary
+(`entitlement`, `payload`, `cache`, `unavailable`, …). It is the kind of thing
+that drifts back toward describing the machine every time someone edits it.
+
 Confirming it is harder than it sounds, because **the failure mode is silence**.
 A missing entitlement, a signed-out device, and a working app with nothing yet
 stored all behave identically from the outside: the game loads the local file

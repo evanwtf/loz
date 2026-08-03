@@ -15,6 +15,9 @@ struct GameMenu: View {
 
     @State private var confirmingReset = false
     @AppStorage("nesSystemControls") private var useSystemControls = false
+    /// Shared with `GameLauncher` by key; the screen it controls is shown
+    /// before this menu can exist, so there is nothing to bind through.
+    @AppStorage("nesCloudScreen") private var showCloudScreen = true
 
     var body: some View {
         ZStack {
@@ -87,6 +90,9 @@ struct GameMenu: View {
             }
             Toggle(isOn: $host.autoResumeEnabled) {
                 Label("Resume where I left off", systemImage: "arrow.uturn.backward.circle")
+            }
+            Toggle(isOn: $showCloudScreen) {
+                Label("iCloud loading screen", systemImage: "icloud")
             }
             Toggle(isOn: $showDiagnostics) {
                 Label("Diagnostics", systemImage: "waveform.path.ecg")

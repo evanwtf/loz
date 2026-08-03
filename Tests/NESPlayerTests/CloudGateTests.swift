@@ -121,12 +121,17 @@ private final class ArrivingStore: KeyValueStore {
     func synchronize() -> Bool { isAvailable }
 }
 
-/// What the interstitial tells the player.
+/// What the iCloud loading screen tells the player.
 ///
-/// The ordering is the whole content here: an empty file screen is alarming,
-/// so a configuration problem has to outrank the steady state or the player
+/// The audience is somebody who does not know what a key-value store is and
+/// should not have to. Two things are being tested: that the right *state* is
+/// chosen, and that each one says what it means for the player's saved game
+/// rather than for the storage layer.
+///
+/// The ordering is the substance: an empty file screen is alarming, so a
+/// configuration problem has to outrank the steady state or the player
 /// concludes their quest is gone.
-@Suite("Save report summary")
+@Suite("iCloud loading screen copy")
 struct SaveReportTests {
     private func report(
         gate: CloudGate.Outcome = .cached,
@@ -137,49 +142,103 @@ struct SaveReportTests {
         SaveReport(gate: gate, cloud: cloud, battery: battery, snapshotFromCloud: snapshot)
     }
 
-    @Test("A build without syncing says so plainly")
-    func off() {
-        #expect(report(cloud: .off).summary == "Local saves only")
-        #expect(report(cloud: .off).isWarning == false)
+    /// Every distinct situation the screen can report.
+    private var everyState: [SaveReport] {
+        [report(cloud: .off),
+         report(cloud: .unavailable, battery: .noSave),
+         report(cloud: .present, battery: .useRemote),
+         report(cloud: .present, battery: .noChange, snapshot: true),
+         report(cloud: .empty, battery: .noSave),
+         report(cloud: .present, battery: .noSave),
+         report(cloud: .present, battery: .useLocal)]
     }
 
-    /// The one that must not be mistaken for a lost quest.
-    @Test("An unavailable store is reported as a warning, not as no save")
+    @Test("A build without syncing says where the game is kept")
+    func off() {
+        let r = report(cloud: .off)
+        #expect(r.headline == "Saved games stay on this device")
+        #expect(r.detail.contains("kept here only"))
+        #expect(r.isWarning == false)
+    }
+
+    /// The one that must not be mistaken for a lost quest — and the only one
+    /// the player can actually do something about, so it says what.
+    @Test("An unreachable store is a warning, and tells the player what to check")
     func unavailable() {
         let r = report(cloud: .unavailable, battery: .noSave)
-        #expect(r.summary == "iCloud unavailable — using local saves")
+        #expect(r.headline == "Can't reach iCloud")
+        #expect(r.detail.contains("still save on this device"))
+        #expect(r.detail.contains("signed in to iCloud"))
         #expect(r.isWarning)
     }
 
     @Test("Adopting the cloud quest outranks everything but a broken store")
     func adopted() {
-        #expect(report(cloud: .present, battery: .useRemote).summary
-            == "Quest loaded from iCloud")
+        #expect(report(cloud: .present, battery: .useRemote).headline
+            == "Saved game loaded from iCloud")
     }
 
     @Test("A cloud snapshot is reported when the battery save did not change")
     func resumed() {
-        #expect(report(cloud: .present, battery: .noChange, snapshot: true).summary
-            == "Resumed from another device")
+        #expect(report(cloud: .present, battery: .noChange, snapshot: true).headline
+            == "Picking up where you left off")
     }
 
-    /// Distinct from "unavailable" on purpose: one is a settings problem and
-    /// the other is a device that has simply never saved.
+    /// Distinct from unreachable on purpose: one is a settings problem and the
+    /// other is a device that has simply never saved. Both are calm.
     @Test("A reachable but empty store is not reported as a failure")
     func empty() {
         let r = report(cloud: .empty, battery: .noSave)
-        #expect(r.summary == "iCloud connected — nothing saved yet")
+        #expect(r.headline == "Connected to iCloud")
+        #expect(r.detail.contains("no saved games yet"))
         #expect(r.isWarning == false)
     }
 
     @Test("A first quest on a working store reads as new, not as empty cloud")
     func newQuest() {
-        #expect(report(cloud: .present, battery: .noSave).summary
-            == "iCloud connected — new quest")
+        let r = report(cloud: .present, battery: .noSave)
+        #expect(r.headline == "Connected to iCloud")
+        #expect(r.detail.contains("Start a quest"))
     }
 
     @Test("The steady state is the quiet one")
     func upToDate() {
-        #expect(report(cloud: .present, battery: .useLocal).summary == "iCloud up to date")
+        let r = report(cloud: .present, battery: .useLocal)
+        #expect(r.headline == "Saved games are up to date")
+        #expect(r.isWarning == false)
+    }
+
+    @Test("Only an unreachable store is coloured as a warning")
+    func onlyUnreachableWarns() {
+        let warning = everyState.filter(\.isWarning)
+        #expect(warning.count == 1)
+        #expect(warning.first?.headline == "Can't reach iCloud")
+    }
+
+    /// A blank line on a screen whose whole job is to explain something would
+    /// be worse than not showing the screen.
+    @Test("Every state has a headline, a detail, and a symbol")
+    func nothingIsBlank() {
+        for r in everyState {
+            #expect(!r.headline.isEmpty)
+            #expect(!r.detail.isEmpty)
+            #expect(!r.symbol.isEmpty)
+            // The detail explains; a headline-length restatement does not.
+            #expect(r.detail.count > r.headline.count)
+        }
+    }
+
+    /// The screen exists for people who would not recognise these words. If one
+    /// reappears the copy has drifted back toward describing the machine.
+    @Test("No implementation vocabulary reaches the player")
+    func noJargon() {
+        let jargon = ["key-value", "entitlement", "store", "payload", "sync ",
+                      "cache", "snapshot", "battery", "unavailable", "nil"]
+        for r in everyState {
+            let copy = (r.headline + " " + r.detail).lowercased()
+            for word in jargon {
+                #expect(!copy.contains(word), "\"\(word)\" in: \(copy)")
+            }
+        }
     }
 }

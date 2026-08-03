@@ -84,7 +84,7 @@ public final class CloudGate {
     }
 }
 
-/// What the launch found, for the interstitial to report.
+/// What the launch found, for the iCloud loading screen to report.
 ///
 /// Exists so "did my quest come down from iCloud?" has an answer on screen
 /// rather than only in the log — a device is not always next to a Mac, and on
@@ -107,23 +107,81 @@ public struct SaveReport: Equatable, Sendable {
         self.snapshotFromCloud = snapshotFromCloud
     }
 
-    /// One line a player can act on.
+    /// Which state this is, in the order the player needs to hear it.
     ///
-    /// Ordered by what the player most needs to know rather than by how the
-    /// checks happen to run: something arriving from another device outranks
-    /// the steady state, and a broken configuration outranks both — an empty
-    /// file screen is alarming, and "iCloud unavailable" turns it from a lost
+    /// Ordered by what matters to them rather than by how the checks happen to
+    /// run: something arriving from another device outranks the steady state,
+    /// and a broken configuration outranks both — an empty file screen is
+    /// alarming, and saying iCloud could not be reached turns it from a lost
     /// quest into a settings problem.
-    public var summary: String {
-        if cloud == .off { return "Local saves only" }
-        if cloud == .unavailable { return "iCloud unavailable — using local saves" }
-        if battery == .useRemote { return "Quest loaded from iCloud" }
-        if snapshotFromCloud { return "Resumed from another device" }
-        if cloud == .empty { return "iCloud connected — nothing saved yet" }
-        if battery == .noSave { return "iCloud connected — new quest" }
-        return "iCloud up to date"
+    private enum State {
+        case off, unreachable, loadedFromCloud, resumedFromCloud
+        case connectedNoSaves, connectedNewQuest, upToDate
     }
 
-    /// Whether the summary reports a problem rather than a normal state.
-    public var isWarning: Bool { cloud == .unavailable }
+    private var state: State {
+        if cloud == .off { return .off }
+        if cloud == .unavailable { return .unreachable }
+        if battery == .useRemote { return .loadedFromCloud }
+        if snapshotFromCloud { return .resumedFromCloud }
+        if cloud == .empty { return .connectedNoSaves }
+        if battery == .noSave { return .connectedNewQuest }
+        return .upToDate
+    }
+
+    /// What happened, in one short line.
+    ///
+    /// Written for somebody who does not know what a key-value store is and
+    /// should not have to. No jargon, no state names, and never a bare
+    /// "unavailable" — the player's question is "where is my game", so the
+    /// answer names the game, not the mechanism.
+    public var headline: String {
+        switch state {
+        case .off: "Saved games stay on this device"
+        case .unreachable: "Can't reach iCloud"
+        case .loadedFromCloud: "Saved game loaded from iCloud"
+        case .resumedFromCloud: "Picking up where you left off"
+        case .connectedNoSaves, .connectedNewQuest: "Connected to iCloud"
+        case .upToDate: "Saved games are up to date"
+        }
+    }
+
+    /// What it means for them — the consequence, and what to do about it.
+    public var detail: String {
+        switch state {
+        case .off:
+            "This copy of the game doesn't use iCloud, so your progress is kept here only."
+        case .unreachable:
+            "Your game will still save on this device, but it won't appear on your "
+                + "other devices. Check that you're signed in to iCloud in Settings."
+        case .loadedFromCloud:
+            "Your progress from another device is ready to play."
+        case .resumedFromCloud:
+            "Continuing from the moment you stopped playing on another device."
+        case .connectedNoSaves:
+            "There are no saved games yet. Once you save, your progress will "
+                + "appear on your other devices too."
+        case .connectedNewQuest:
+            "No saved game on this device yet. Start a quest and it will be "
+                + "shared with your other devices."
+        case .upToDate:
+            "Your progress matches your other devices."
+        }
+    }
+
+    /// Whether this reports a problem rather than a normal state, so the screen
+    /// can colour it. Only the unreachable case qualifies: having no saves yet
+    /// is not a fault, and colouring it like one would alarm a new player.
+    public var isWarning: Bool { state == .unreachable }
+
+    /// The symbol shown above the headline.
+    public var symbol: String {
+        switch state {
+        case .off: "iphone"
+        case .unreachable: "exclamationmark.icloud"
+        case .loadedFromCloud, .resumedFromCloud: "icloud.and.arrow.down"
+        case .connectedNoSaves, .connectedNewQuest: "icloud"
+        case .upToDate: "checkmark.icloud"
+        }
+    }
 }
