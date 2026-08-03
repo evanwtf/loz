@@ -143,6 +143,25 @@ public final class SaveSync {
         }
     }
 
+    /// Picks the newer of two snapshots, by time alone.
+    ///
+    /// Deliberately *not* `resolve`. That one compares content and refuses an
+    /// all-zero payload, both of which are battery-save concerns: a blank
+    /// cartridge is a real and dangerous state, whereas a snapshot is either
+    /// present or absent. Reusing it here was an actual bug — the local side
+    /// had no bytes to hand, `[].allSatisfy` is vacuously true, so the
+    /// empty-payload guard fired and the remote snapshot won every time
+    /// regardless of when either was written.
+    public static func resolveByTime(local: Date?, remote: Date?) -> Resolution {
+        switch (local, remote) {
+        case (nil, nil): .noSave
+        case (.some, nil): .useLocal
+        case (nil, .some): .useRemote
+        case let (.some(here), .some(there)):
+            there.timeIntervalSince(here) > clockTolerance ? .useRemote : .useLocal
+        }
+    }
+
     // MARK: Transport
 
     /// What the store currently holds, or nil when there is nothing usable.
@@ -189,4 +208,33 @@ final class FakeKeyValueStore: KeyValueStore {
     }
 
     func synchronize() { synchronizeCount += 1 }
+}
+
+/// Compresses machine snapshots for syncing.
+///
+/// A snapshot is JSON, and most of it is byte arrays written out as decimal
+/// text — `prgRAM` and CHR-RAM alone are two thirds of it. That compresses
+/// about five to one: a measured 61,279-byte snapshot becomes 13,140.
+///
+/// The difference decides whether syncing snapshots is reasonable at all.
+/// iCloud's key-value store allows 1 MB in total, so 61 KB per snapshot is a
+/// careless share of a shared budget and 13 KB is not.
+enum SnapshotCodec {
+    static func compress(_ bytes: [UInt8]) -> [UInt8]? {
+        guard !bytes.isEmpty else { return nil }
+        guard let squeezed = try? (Data(bytes) as NSData).compressed(using: .zlib)
+        else { return nil }
+        return [UInt8](squeezed as Data)
+    }
+
+    /// Returns nil for anything that is not actually a compressed snapshot,
+    /// rather than throwing. A payload written by a different version of this
+    /// app, or truncated in transit, is an ordinary state — the app falls back
+    /// to a normal boot.
+    static func decompress(_ bytes: [UInt8]) -> [UInt8]? {
+        guard !bytes.isEmpty else { return nil }
+        guard let expanded = try? (Data(bytes) as NSData).decompressed(using: .zlib)
+        else { return nil }
+        return [UInt8](expanded as Data)
+    }
 }

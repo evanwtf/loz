@@ -78,10 +78,14 @@ public struct GameLauncher<G: GameDefinition>: View {
 
     private func start(with romData: [UInt8]) {
         do {
+            // The app is where iCloud gets opted into; a bare host stays local.
+            let cloud = EmulatorHost.cloudSyncing()
             host = try EmulatorHost(
                 game: game,
                 romData: romData,
-                saveURL: EmulatorHost.defaultSaveURL(for: G.romResourceName))
+                saveURL: EmulatorHost.defaultSaveURL(for: G.romResourceName),
+                saveSync: cloud.save,
+                snapshotSync: cloud.snapshot)
         } catch {
             failure = String(describing: error)
         }
