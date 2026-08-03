@@ -95,21 +95,36 @@ controller" overlay whenever none is attached, naming Xbox, DualSense, and MFi
 explicitly. Without that, an Apple TV with no controller paired looks like a
 frozen game.
 
-### It has never been compiled
+### It compiles and runs
 
-Stated plainly because it is easy to assume otherwise: the tvOS **platform
-component** is not installed on the development machine, so this target has
-never been built, let alone run.
+For a long time it did not — the tvOS **platform component** was not installed,
+so the target was written but never built. It is now verified on the Apple TV
+4K simulator: builds clean, boots, holds 60 fps emulated and 60 fps shown, and
+resumes from a snapshot with correct colour and geometry.
 
-**Do not check this with `xcodebuild -showsdks`** — it lists tvOS regardless.
-The only reliable test is attempting a build, which fails with:
+**Do not check whether the platform is installed with `xcodebuild -showsdks`** —
+it lists tvOS regardless. The only reliable test is attempting a build, which
+without the component fails with:
 
 ```
 tvOS N is not installed. Please download and install the platform from
 Xcode > Settings > Components.
 ```
 
-Treat the target as written-but-unverified. It compiles against the same
-`NESPlayer` the other two apps use, so the risk is concentrated in the
-`#if os(tvOS)` branches — `GameControllerSupport` and `AudioOutput`'s session
-configuration — rather than spread across the codebase.
+The picture measures 2720x2040 on a 3840x2160 screen — exactly 4:3, pillarboxed
+and centred horizontally. Worth stating because it took three attempts to
+establish: measuring the *content* rather than the view's bounds gives nonsense,
+since Zelda's own frame is largely black and the diagnostics overlay sits on the
+full-screen container rather than on the picture. Colouring the screen's
+background and measuring that is the only reading that means anything.
+
+One cosmetic note: the picture sits 120 px lower in its container than a centred
+layout would put it. Invisible in practice — black on black — and left alone
+rather than "fixed" on a guess.
+
+Saves are the part that needed real work, and it is not a tvOS quirk but a tvOS
+*rule*: an Apple TV gives an app no guaranteed persistent local storage, so a
+quest kept only in the Documents directory can be evicted whenever the system
+wants space. The battery save therefore syncs through iCloud's key-value store,
+sharing one identifier with the phone so a game started on one continues on the
+other. See `docs/issues/0030-investigate-storing-savegames-state-in-icloud.md`.

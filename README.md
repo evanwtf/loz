@@ -23,7 +23,7 @@ dungeon — with sound.
 | MMC1 mapper | Complete (Zelda's SNROM board) |
 | iOS app | Running, portrait and landscape, save states |
 | macOS app | Running (`swift run zeldamac`) |
-| tvOS app | Written, **unverified** — tvOS SDK not installed |
+| tvOS app | Running on the Apple TV simulator; saves sync via iCloud |
 | Agent harness | Scripted input, PNG capture, snapshots, pathfinding, tracing |
 | Decompilation | 9 routines native and verified, cycle-exact; the loop is proven |
 

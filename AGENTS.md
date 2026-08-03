@@ -55,10 +55,9 @@ must stay playable at every step.
   by the routine-equivalence tests. `swift build`/`swift test` do **not** need
   it — tests synthesise iNES images in memory and ROM-dependent tests skip
   cleanly when it is absent.
-- The tvOS app is written but has never been compiled: the tvOS **platform
-  component** is not installed. Do not check with `xcodebuild -showsdks` — it
-  lists tvOS anyway. Only an attempted build is diagnostic, and it fails with
-  "tvOS N is not installed."
+- The tvOS app builds and runs on the Apple TV simulator. It needs the tvOS
+  **platform component** installed; without it only an attempted build is
+  diagnostic, since `xcodebuild -showsdks` lists tvOS either way.
 
 ## Commands
 
