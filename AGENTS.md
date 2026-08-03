@@ -111,6 +111,8 @@ Sources/
 Apps/          ZeldaiOS / ZeldatvOS Xcode projects — thin shells, scheme "Zelda".
                PadTest is a standalone GCVirtualController probe, not a game target.
 Tests/         NESCoreTests, NESAnalysisTests, NESPlayerTests, ZeldaGameTests
+Tools/         one-shot generators run by hand, not by the build — tvos-icon.py
+               re-cuts the iOS icon into tvOS's layered brand assets
 docs/          architecture, decompilation, agent-harness, testing, adding-a-game,
                rom-format, rom-free, emulator-{cpu,ppu,apu,mappers},
                {ios,macos}-app, distribution, gotchas; README.md is the index,
