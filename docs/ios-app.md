@@ -166,6 +166,69 @@ Three separate mechanisms, each with a different job:
 | **Save states** (4 slots) | Full machine snapshots the player chooses to keep, with thumbnails, in the in-game menu. |
 | **Auto-resume** | An automatic snapshot so the app comes back where it left off. See below. |
 
+### iCloud syncing, and how to confirm it works
+
+Two of the three sync through `NSUbiquitousKeyValueStore`: the **battery save**
+on every save, and the **auto-resume snapshot** when the app goes away (not on
+the 20-second timer — 13 KB every twenty seconds is a careless share of a 1 MB
+budget). Both use the identifier pinned in `Zelda.entitlements`, which the phone
+and the Apple TV deliberately *share* so one quest continues on the other.
+
+Confirming it is harder than it sounds, because **the failure mode is silence**.
+A missing entitlement, a signed-out device, and a working app with nothing yet
+stored all behave identically from the outside: the game loads the local file
+and plays. That is the right behaviour — nobody should lose a game because they
+signed out — but it means "it worked" and "it did nothing" look the same.
+
+So the load logs which of four states it was in:
+
+| `icloud:` | Meaning |
+|---|---|
+| `off` | This build never asked for syncing. |
+| `unavailable` | No iCloud account, or the app is signed without the entitlement. |
+| `empty` | Reached iCloud; nothing stored yet. |
+| `present` | Reached iCloud and found a save. |
+
+Watch it with Console.app — pick the device in the sidebar, then filter on the
+subsystem. (The `log` CLI cannot stream from a paired device; it dropped the
+`--device` flag.) On a Mac the same thing works directly:
+
+```sh
+log stream --predicate 'subsystem == "wtf.evan.loz" AND category == "state"'
+```
+
+The lines worth waiting for:
+
+```
+battery save: useRemote (icloud: present)
+auto-resume: pushed 13140 bytes to iCloud
+auto-resume: taking the iCloud snapshot
+auto-resume: iCloud unavailable, kept the local snapshot only
+```
+
+**The log alone is not proof.** It shows this device reaching the store; it
+cannot show the other device seeing the same key. Only the round trip does that:
+
+1. On device A, play until the game writes battery RAM — save at the file
+   screen, or die and choose Continue — then background the app.
+2. Give iCloud a moment. Key-value sync is prompt but not instant, and it does
+   not sync at all on a metered or sleeping connection.
+3. Launch on device B and read its log. `battery save: useRemote (icloud:
+   present)` is the round trip completing; `(icloud: empty)` means A never
+   pushed, and `(icloud: unavailable)` means B cannot see the store at all.
+
+If a device reports `unavailable`, check the entitlement actually survived
+signing rather than assuming it did — Xcode rewrites entitlements files:
+
+```sh
+codesign -d --entitlements - --xml <path>/Zelda.app \
+  | plutil -convert xml1 -o - - | grep -A1 ubiquity
+```
+
+Both apps must print the **same** identifier. Deriving it from the bundle ID is
+the tempting mistake and gives the two apps separate stores that each sync
+perfectly with themselves. See [gotchas.md](gotchas.md).
+
 ## Sideloading to a device
 
 The bundle identifier is `wtf.evan.loz.zelda` and signing is automatic — set

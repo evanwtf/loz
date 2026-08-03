@@ -286,6 +286,14 @@ public final class EmulatorHost: ObservableObject {
         AutoResume.write(state, to: autoResumeURL)
 
         guard toCloud, let snapshotSync else { return }
+        // Checked rather than assumed: an unavailable store accepts the write
+        // and drops it, so without this the log below reports a push that
+        // never happened — the one message that would make a broken
+        // entitlement look like a working one.
+        guard snapshotSync.isAvailable else {
+            Log.state.notice("auto-resume: iCloud unavailable, kept the local snapshot only")
+            return
+        }
         guard let encoded = try? JSONEncoder().encode(state),
               let squeezed = SnapshotCodec.compress([UInt8](encoded))
         else { return }
@@ -546,8 +554,13 @@ public final class EmulatorHost: ObservableObject {
             }
         }
 
+        // The cloud status travels with the verdict because `useLocal` alone
+        // cannot tell you whether iCloud was consulted and empty or never
+        // reachable at all — and those need very different fixes.
         let verdict = String(describing: resolution)
-        Log.state.notice("battery save: \(verdict, privacy: .public)")
+        let cloud = SaveSync.status(of: saveSync, holding: remote).rawValue
+        Log.state.notice(
+            "battery save: \(verdict, privacy: .public) (icloud: \(cloud, privacy: .public))")
     }
 
     public func saveBatterySave() {
