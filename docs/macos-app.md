@@ -95,6 +95,21 @@ controller" overlay whenever none is attached, naming Xbox, DualSense, and MFi
 explicitly. Without that, an Apple TV with no controller paired looks like a
 frozen game.
 
+### Run builds Release, deliberately
+
+The scheme's Run action uses **Release** on tvOS, unlike iOS which stays Debug.
+
+Not a preference. `NESCore` gets `-O` in Debug and `-Ounchecked` in Release, and
+for an interpreter that is a 3.5x difference — 19.2 ms per frame against 5.8 ms,
+where the budget is 16.7 ms. A phone absorbs the Debug build and an Apple TV
+cannot, so on tvOS "build and hit Run" would otherwise always produce something
+that looks broken. It presents as **30 fps**, since `CADisplayLink` drops to a
+divisor of 60 when a deadline slips, and the audio drags with it.
+
+What that costs is stepping through app code on tvOS. The app is fifteen lines;
+everything worth debugging lives in `NESPlayer` and `NESCore`, which are
+optimised in Debug anyway. See [gotchas.md](gotchas.md).
+
 ### It compiles and runs
 
 For a long time it did not — the tvOS **platform component** was not installed,
