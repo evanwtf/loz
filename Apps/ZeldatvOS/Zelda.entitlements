@@ -11,7 +11,13 @@
 	     The Apple TV target is wtf.evan.loz.zelda.tv, so deriving it would give
 	     the two apps separate stores and they would never see each other's
 	     saves — which is the entire point of syncing them. Both targets name
-	     the phone's identifier deliberately. -->
+	     the phone's identifier deliberately.
+
+	     Xcode's capability editor rewrites this file and will re-add
+	     `aps-environment` and CloudKit keys. Neither is used: there are no
+	     notifications and no CloudKit container. They are harmless but they are
+	     not ours, so they are removed again rather than left to imply the app
+	     does something it does not. -->
 	<key>com.apple.developer.ubiquity-kvstore-identifier</key>
 	<string>$(TeamIdentifierPrefix)wtf.evan.loz.zelda</string>
 </dict>
