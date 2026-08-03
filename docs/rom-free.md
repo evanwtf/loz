@@ -45,7 +45,7 @@ the engineering.
    port stops being a transliteration and starts being readable: a room becomes
    a `Room` value, not an offset into a blob.
 4. **Rendering** — replace PPU emulation with direct drawing from native state
-   ([#10](../../../issues/10)).
+   ([#10](issues/0010-native-renderer-draw-from-game-state-instead-of-emulating-th.md)).
 5. **Drop the ROM** — once nothing reads it, remove the resource and the hash
    check with it.
 

@@ -29,6 +29,13 @@
 | [macos-app.md](macos-app.md) | `zeldamac` and its self-test; the tvOS target's status |
 | [distribution.md](distribution.md) | Getting a build onto a device, and why not TestFlight |
 
+## Issue archive
+
+[issues/](issues/) — the 28 tracked issues, one Markdown file each, with their
+comments. They were kept in GitHub's issue tracker until the repository was
+prepared for publication; the files are now the record, so a clone carries the
+project's roadmap and its reasoning rather than pointing at a server.
+
 ## Reference material
 
 `nesrun mapcheck` scores a rendered screen against a complete First Quest
