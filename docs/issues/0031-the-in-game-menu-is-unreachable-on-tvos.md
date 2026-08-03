@@ -1,4 +1,4 @@
-# #31 — The in-game menu is unreachable on tvOS
+# #31 — Establish how the in-game menu is reached on tvOS
 
 | | |
 |---|---|
@@ -11,44 +11,44 @@
 ---
 
 On iPhone the menu opens from the `ellipsis.circle.fill` button in the corner.
-On an Apple TV there is no way to reach it, so save states, the auto-resume
-toggle, diagnostics, and mute are all inaccessible on that platform.
+On an Apple TV it is not obvious how to reach it, and how it behaves during
+play has not been established.
 
-The button is not the problem — it renders. Confirmed by screenshotting a real
-Apple TV: it is drawn in the top-right corner, exactly where iOS puts it. The
-overlay that places it is not inside `#if os(iOS)`.
+**Correcting a wrong first diagnosis, which is why this is written down.** The
+button was reported as unreachable on tvOS. It is not. A screenshot of a real
+Apple TV shows it drawn in the top-right corner *and in its focused state* —
+large and highlighted, the standard tvOS focus appearance. So the focus engine
+does reach it, and `.buttonStyle(.plain)` does not suppress the effect the way
+the first reading assumed.
 
-Two things stop it working, and both need fixing:
+What is actually unresolved is the **interaction between focus and gameplay**,
+and it needs measuring rather than reasoning about:
 
-- **`.buttonStyle(.plain)` suppresses the focus effect.** Even if the focus
-  engine reaches the button, tvOS draws no ring or lift, so there is no way to
-  see that it is selected.
-- **The controller's Menu button is mapped to NES START**
-  (`GameControllerSupport.swift`, `pad.buttonMenu.pressedChangedHandler =
-  press(.start)`). That is the button a tvOS user would reach for, and it goes
-  to the game instead.
+- The button appears to hold focus by default at launch. If it does, what does
+  the controller's A button do while it is focused — attack, or open the menu?
+  Those cannot both be right.
+- The d-pad and left stick are bound to Link through `GCController` handlers,
+  which do not consume the events. So the same press may steer Link *and* move
+  focus.
+- `pad.buttonMenu` is mapped to NES START
+  (`GameControllerSupport.swift`), so the button a tvOS user would instinctively
+  press for a menu goes to the game instead.
 
-There is also a conflict to resolve rather than design around: the d-pad and
-left stick are bound to Link, so they cannot double as focus navigation. Any
-fix that relies on moving focus to the button has to say what moves focus.
+## What to do first
 
-## Options
+Measure, do not design. Connect a controller and answer, with screenshots:
 
-1. **Long-press Menu opens the app menu; a short press stays NES START.**
-   Costs no button and matches how the control is already used. START arrives
-   on release rather than on press, which is fine for a button used to open the
-   inventory and not in combat.
-2. **Reassign Menu to the app menu and move NES START elsewhere.** Cleanest
-   against the tvOS convention that Menu means *menu*, but START is used
-   constantly in Zelda and would have to displace something.
-3. **Make the button properly focusable on tvOS** with a real focus style, and
-   accept that the d-pad both steers Link and moves focus.
+1. Does the menu button hold focus at launch, and does anything take it away?
+2. With it focused, does A open the menu, attack, or both?
+3. Does the d-pad move focus while steering Link?
 
-Option 1 looks best: it is the only one that costs nothing elsewhere.
+Only then choose a fix. If focus already works, this may be a matter of
+directing focus away from the button during play and giving the player a
+deliberate way back — likely a long press on Menu, which costs no button and
+leaves START where muscle memory expects it.
 
 ## Notes
 
-Worth checking against the emulator's own state, not just the UI: opening the
-menu pauses the host, and on tvOS `persistForBackgrounding` is the only thing
-that writes a snapshot to iCloud. A player who cannot open the menu also cannot
-deliberately save.
+Worth checking against the emulator's state and not just the UI: opening the
+menu pauses the host, and `persistForBackgrounding` is what writes a snapshot
+to iCloud. A player who cannot open the menu also cannot deliberately save.

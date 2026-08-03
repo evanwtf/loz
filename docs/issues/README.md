@@ -32,5 +32,5 @@ written here directly, since the tracker now lives in the repository.
 | [26](0026-touch-presses-take-500-ms-to-register-on-iphone-and-nothing.md) | closed | 2 | Touch: presses take ~500 ms to register on iPhone, and nothing visible confirms a press — add activation callouts |
 | [28](0028-clearroom-should-count-enemies-from-0350-not-from-oam.md) | closed | 0 | clearroom should count enemies from $0350, not from OAM |
 | [30](0030-investigate-storing-savegames-state-in-icloud.md) | open | 1 | Investigate storing savegames/state in iCloud |
-| [31](0031-the-in-game-menu-is-unreachable-on-tvos.md) | open | 0 | The in-game menu is unreachable on tvOS |
+| [31](0031-the-in-game-menu-is-unreachable-on-tvos.md) | open | 0 | Establish how the in-game menu is reached on tvOS |
 | [36](0036-routinetable-can-t-express-a-routine-whose-cycle-count-varie.md) | closed | 0 | RoutineTable can't express a routine whose cycle count varies |
