@@ -10,8 +10,13 @@ public protocol KeyValueStore: AnyObject {
     var isAvailable: Bool { get }
     func data(forKey key: String) -> Data?
     func set(_ data: Data, forKey key: String)
-    /// Pushes pending changes. Best-effort; the system syncs on its own too.
-    func synchronize()
+    /// Pushes pending changes and reports whether the store is usable at all.
+    ///
+    /// The return value is the only honest availability signal a key-value
+    /// store offers, which is why it is not discarded — see
+    /// `UbiquitousKeyValueStore.isAvailable`.
+    @discardableResult
+    func synchronize() -> Bool
 }
 
 /// iCloud's key-value store.
@@ -28,16 +33,34 @@ public protocol KeyValueStore: AnyObject {
 /// runnable.
 public final class UbiquitousKeyValueStore: KeyValueStore {
     private let store = NSUbiquitousKeyValueStore.default
+    /// Latched once the store answers for itself. Availability can only
+    /// improve — an account signs in, the daemon comes up — so a `false` is
+    /// re-probed while a `true` is kept.
+    private var confirmed = false
 
     public init() {}
 
-    /// False when there is no iCloud account, or the entitlement is missing.
+    /// Whether the store can actually be used.
     ///
-    /// Both are ordinary states — a signed-out device, or a build signed
-    /// without the capability — so they degrade to local-only saves rather
-    /// than to an error the player cannot act on.
+    /// This asks `synchronize()`, which returns false when the app was built
+    /// without a valid `ubiquity-kvstore-identifier` entitlement. It is the
+    /// only signal the key-value store gives about itself.
+    ///
+    /// **It must not be `FileManager.ubiquityIdentityToken`.** That token
+    /// describes the user's *iCloud Drive* identity, and tvOS has no iCloud
+    /// Drive — so it is nil on an Apple TV no matter how correctly the app is
+    /// signed. Because this property gates reads *and* writes, using it meant
+    /// the Apple TV never read or wrote a single byte, while the iPhone synced
+    /// perfectly. The platform that most needs syncing was the one silently
+    /// excluded from it: an Apple TV has no guaranteed persistent local
+    /// storage, which is the whole reason this class exists.
+    ///
+    /// Being unavailable stays an ordinary state that degrades to local saves
+    /// rather than an error the player cannot act on.
     public var isAvailable: Bool {
-        FileManager.default.ubiquityIdentityToken != nil
+        if confirmed { return true }
+        confirmed = store.synchronize()
+        return confirmed
     }
 
     public func data(forKey key: String) -> Data? {
@@ -50,9 +73,13 @@ public final class UbiquitousKeyValueStore: KeyValueStore {
         store.set(data, forKey: key)
     }
 
-    public func synchronize() {
-        guard isAvailable else { return }
-        store.synchronize()
+    @discardableResult
+    public func synchronize() -> Bool {
+        // Calls through to the store rather than guarding on `isAvailable`,
+        // which is itself defined by this call.
+        let ok = store.synchronize()
+        if ok { confirmed = true }
+        return ok
     }
 }
 
@@ -70,7 +97,7 @@ public final class SaveSync {
         }
     }
 
-    public enum Resolution: Equatable {
+    public enum Resolution: Equatable, Sendable {
         /// Neither side has anything worth loading.
         case noSave
         /// Keep what is on this device.
@@ -100,7 +127,7 @@ public final class SaveSync {
     /// nobody should lose a game because they signed out — but it leaves "is
     /// syncing actually working?" with no answer short of buying a second
     /// device.
-    public enum CloudStatus: String {
+    public enum CloudStatus: String, Sendable {
         /// Syncing was never asked for; this build is local-only.
         case off
         /// No iCloud account, or the app is signed without the entitlement.
@@ -237,7 +264,11 @@ final class FakeKeyValueStore: KeyValueStore {
         storage[key] = data
     }
 
-    func synchronize() { synchronizeCount += 1 }
+    @discardableResult
+    func synchronize() -> Bool {
+        synchronizeCount += 1
+        return available
+    }
 }
 
 /// Compresses machine snapshots for syncing.
