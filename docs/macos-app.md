@@ -119,25 +119,49 @@ settings, the save slots and every toggle were unreachable on tvOS.
 
 Two ways in now:
 
-| Input | Opens the menu |
-|---|---|
-| **Hold Menu** (small right-hand button; **Options** on a DualShock 4) | after 0.5 s |
-| **Touchpad click** (DualShock / DualSense) | immediately |
+| Input | Opens the menu | Closes it |
+|---|---|---|
+| **Hold Menu** (small right-hand button; **Options** on a DualShock 4) | after 0.5 s | immediately |
+| **Touchpad click** (DualShock / DualSense) | immediately | immediately |
 
 A tap of Menu is still NES START. The only cost of sharing it is that START
 arrives on release rather than on press, which is fine for a button used to
-open the inventory and never in combat.
+open the inventory and never in combat. Whatever opens the menu also closes
+it — being unable to get out is worse than being unable to get in.
 
-**Opening the menu is only half of it.** Once an app sets
-`dpad.valueChangedHandler`, the system stops synthesising focus movement from
-that controller and gives the input to the app — so with the game holding the
-pad, the menu opened with its close button focused and focus could not be moved
-off it. Every row was visible and none was reachable.
+### The app has to own the controller
 
-The handlers are therefore detached while the menu is up and reattached when it
-closes, which returns the controller to the focus engine and then to the game.
-Anything held at the moment the menu opens is released too, or a direction held
-while opening stays pressed for as long as the menu is showing.
+**Opening the menu was only half of it.** The menu appeared with its close
+button focused and focus could not be moved off it: every row visible, none
+reachable.
+
+The cause is that **tvOS keeps the controller for itself** and the app sees
+only what is left over. One fact, three symptoms:
+
+- **Circle exited the game.** The system reads B/Circle as "back", so the
+  button Zelda uses for the sword quit to the home screen instead.
+- **The menu could not be navigated.** Once an app sets
+  `dpad.valueChangedHandler`, the system stops synthesising focus movement
+  from that controller, so nothing moved the selection.
+- **Detaching the handlers did not give focus back**, because the routing
+  decision outlives the handler. That was the first fix attempted and it did
+  not work on device.
+
+`GCEventViewController` with `controllerUserInteractionEnabled = false` claims
+the controller properly — see `ControllerInputCapture.swift`, attached in
+`EmulatorView` as a 1×1 background on tvOS. The player can still always leave:
+the TV/Home button is reserved by the system and this cannot take it.
+
+The consequence is that **nothing is navigated for us any more**. The menu
+moves its own selection and draws its own highlight, since there is no focus
+ring to inherit; `MenuRouter` carries the input to it and `GameMenu` maps rows
+to actions. Every controller handler asks the router first, so the menu and the
+game never both own the pad.
+
+| In the menu | |
+|---|---|
+| D-pad / stick up-down | Move the selection (wraps at both ends) |
+| Any face button (✕ ○ □ △) | Activate the highlighted row |
 
 ### It compiles and runs
 

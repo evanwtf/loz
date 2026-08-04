@@ -74,3 +74,31 @@ Two routes in, neither costing a button the game needs:
 - **Click the touchpad** on a DualShock or DualSense. The NES has no use for
   it, and a spare button on the most common controller is the least surprising
   place to put this.
+
+### Opening it was only half the problem
+
+The menu then opened with its close button focused and focus could not be moved
+off it. Two fixes were tried and only the second worked on device, which is the
+part worth recording:
+
+1. **Detach the d-pad handlers while the menu is up**, returning the controller
+   to the focus engine. Reasonable, and wrong: the routing decision outlives
+   the handler, so the system does not take the pad back just because the app
+   stopped listening.
+2. **Claim the controller outright** with `GCEventViewController` and
+   `controllerUserInteractionEnabled = false`.
+
+What pointed at the real cause was a user observation that looked unrelated:
+*pressing Circle exits the game, like the remote's Home button.* That is tvOS
+reading B/Circle as system "back" — proof the system, not the app, was routing
+the controller. The unnavigable menu and the quitting sword button were one
+bug, not two.
+
+The cost of claiming it is that nothing is navigated for us: the menu now moves
+its own selection and draws its own highlight, because there is no focus ring
+to inherit. `MenuRouter` carries input to `GameMenu`, and every handler in
+`GameControllerSupport` asks the router first so the menu and the game never
+both own the pad.
+
+Whatever opens the menu also closes it. Being unable to get out is worse than
+being unable to get in.
