@@ -132,11 +132,20 @@ public struct EmulatorView: View {
         #endif
             .onChange(of: scenePhase) { _, phase in
                 switch phase {
-                case .inactive, .background:
-                    // Snapshot on .inactive as well as .background: it fires
-                    // first and is where the system is most generous with time.
-                    // Writing twice is harmless — the encode is sub-millisecond
-                    // and the write is atomic.
+                case .inactive:
+                    // Locally only. `.inactive` fires first and is where the
+                    // system is most generous with time, so it is still the
+                    // right moment to write a snapshot to disk — but it also
+                    // fires whenever tvOS wants a thumbnail for its app
+                    // switcher, which is several times a minute. Pushing 13 KB
+                    // to iCloud each time was a careless share of a 1 MB
+                    // budget from a service that throttles frequent writers,
+                    // and it bought nothing: the app was not going anywhere.
+                    host.saveBatterySave()
+                    host.saveAutoResume()
+                    host.isPaused = true
+                case .background:
+                    // Actually leaving. This is the one that earns a push.
                     host.persistForBackgrounding()
                     host.isPaused = true
                 case .active:
