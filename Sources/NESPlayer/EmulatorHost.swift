@@ -654,13 +654,17 @@ public final class EmulatorHost: ObservableObject {
         // reported as one line cannot distinguish a device that never pushed
         // from one that pushed and was overwritten later.
         Log.state.notice("save: game wrote \(bytes.count, privacy: .public) bytes to disk")
+        diagnostics.saveActivity.lastSave = Date()
+        diagnostics.saveActivity.saves += 1
 
         guard let saveSync else {
+            diagnostics.saveActivity.sync = .off
             Log.state.notice("sync: not enabled in this build; save stays on this device")
             return
         }
         guard saveSync.isAvailable else {
             notices.post(.savedLocally)
+            diagnostics.saveActivity.sync = .unreachable
             Log.state.notice("sync: iCloud unreachable; save stays on this device")
             return
         }
@@ -672,9 +676,13 @@ public final class EmulatorHost: ObservableObject {
         let accepted = saveSync.write(bytes, modified: Date())
         if accepted {
             notices.post(.savedToCloud)
+            diagnostics.saveActivity.lastSync = Date()
+            diagnostics.saveActivity.syncs += 1
+            diagnostics.saveActivity.sync = .handed
             Log.state.notice(
                 "sync: handed \(bytes.count, privacy: .public) bytes to iCloud")
         } else {
+            diagnostics.saveActivity.sync = .refused
             // A refusal here is a real signal — synchronize() returns false
             // when the entitlement is missing or invalid — and reporting it as
             // success is how a broken build looks like a working one.

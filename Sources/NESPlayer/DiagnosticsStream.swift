@@ -60,6 +60,46 @@ public final class DiagnosticsStream: ObservableObject {
     @Published public internal(set) var inputLatency = InputLatency()
     @Published public internal(set) var gestureLatency = InputLatency()
     @Published public internal(set) var presentation = Presentation()
+    @Published public internal(set) var saveActivity = SaveActivity()
+
+    public init() {}
+}
+
+/// What the save path has actually done this session, on screen.
+///
+/// On screen because the log is not reachable. `log collect` from a paired
+/// device needs root, and on an Apple TV over the network it fails outright
+/// with "Device not configured" — so the unified log is unavailable in exactly
+/// the situation it is wanted, which is the same reason the frame timings are
+/// drawn here rather than only logged.
+///
+/// Two counters, not one. A save and its push fail independently, and the
+/// question that matters — "did this device ever push?" — is answered by the
+/// two disagreeing. A single "last saved" reading cannot distinguish a device
+/// that never pushed from one that pushed and was overwritten afterwards.
+public struct SaveActivity: Equatable {
+    /// How the last attempt to hand the save to iCloud ended.
+    public enum Sync: String, Equatable {
+        /// Never attempted this session.
+        case never
+        /// Handed to the iCloud daemon.
+        case handed
+        /// The store reported itself unreachable.
+        case unreachable
+        /// The store took the value and refused to synchronise it.
+        case refused
+        /// This build never asked to sync.
+        case off
+    }
+
+    /// When the game last wrote battery RAM, and how many times it has.
+    public var lastSave: Date?
+    public var saves = 0
+
+    /// When the save was last handed to iCloud, and how many times.
+    public var lastSync: Date?
+    public var syncs = 0
+    public var sync: Sync = .never
 
     public init() {}
 }
