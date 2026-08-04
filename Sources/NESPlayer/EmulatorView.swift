@@ -184,7 +184,7 @@ public struct EmulatorView: View {
             }
         #endif
             .modifier(KeyboardControls(host: host, showDiagnostics: $showDiagnostics))
-            .modifier(GameControllerSupport(host: host, onMenu: {
+            .modifier(GameControllerSupport(host: host, menuIsOpen: showMenu, onMenu: {
                 guard !showMenu else { return }
                 store.refresh()
                 host.isPaused = true

@@ -128,6 +128,17 @@ A tap of Menu is still NES START. The only cost of sharing it is that START
 arrives on release rather than on press, which is fine for a button used to
 open the inventory and never in combat.
 
+**Opening the menu is only half of it.** Once an app sets
+`dpad.valueChangedHandler`, the system stops synthesising focus movement from
+that controller and gives the input to the app — so with the game holding the
+pad, the menu opened with its close button focused and focus could not be moved
+off it. Every row was visible and none was reachable.
+
+The handlers are therefore detached while the menu is up and reattached when it
+closes, which returns the controller to the focus engine and then to the game.
+Anything held at the moment the menu opens is released too, or a direction held
+while opening stays pressed for as long as the menu is showing.
+
 ### It compiles and runs
 
 For a long time it did not — the tvOS **platform component** was not installed,

@@ -8,6 +8,10 @@ import SwiftUI
 /// preferred input everywhere else.
 struct GameControllerSupport: ViewModifier {
     let host: EmulatorHost
+    /// Whether the app's menu is up, in which case the pad belongs to the
+    /// menu rather than to the game.
+    let menuIsOpen: Bool
+
     /// Opens the app's own menu. Reached by holding the controller's Menu
     /// button, which on tvOS is the only route to it.
     let onMenu: () -> Void
@@ -29,6 +33,20 @@ struct GameControllerSupport: ViewModifier {
             .task {
                 attachExisting()
                 await observeConnections()
+            }
+            // Handing the pad back is what makes the menu usable on tvOS.
+            //
+            // Once an app sets `dpad.valueChangedHandler`, the system stops
+            // synthesising focus movement from that controller and gives the
+            // input to the app instead. The game was therefore eating every
+            // d-pad event, and the menu — which is navigated *by* the focus
+            // engine — could never receive one. It opened with the close
+            // button focused and focus could not be moved off it.
+            //
+            // Detaching while the menu is up returns the controller to the
+            // focus engine, and reattaching on close returns it to the game.
+            .onChange(of: menuIsOpen) { _, open in
+                if open { detachHandlers() } else { attachExisting() }
             }
         #if os(tvOS)
             .overlay(alignment: .bottom) {
@@ -56,6 +74,30 @@ struct GameControllerSupport: ViewModifier {
             .padding(.bottom, 60)
         }
     #endif
+
+    /// Releases the controller back to the focus engine, and lets go of
+    /// anything the player was holding — otherwise a direction held as the
+    /// menu opened stays pressed for as long as it is up.
+    private func detachHandlers() {
+        for controller in GCController.controllers() {
+            guard let pad = controller.extendedGamepad else { continue }
+            for button in [pad.buttonA, pad.buttonB, pad.buttonX, pad.buttonY,
+                           pad.buttonMenu, pad.rightShoulder]
+            {
+                button.pressedChangedHandler = nil
+            }
+            pad.buttonOptions?.pressedChangedHandler = nil
+            pad.dpad.valueChangedHandler = nil
+            pad.leftThumbstick.valueChangedHandler = nil
+            if let dualShock = pad as? GCDualShockGamepad {
+                dualShock.touchpadButton.pressedChangedHandler = nil
+            } else if let dualSense = pad as? GCDualSenseGamepad {
+                dualSense.touchpadButton.pressedChangedHandler = nil
+            }
+        }
+        host.releaseAllButtons()
+        host.speedMultiplier = 1
+    }
 
     private func attachExisting() {
         for controller in GCController.controllers() {
