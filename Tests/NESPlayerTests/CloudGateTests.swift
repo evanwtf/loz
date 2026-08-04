@@ -242,3 +242,115 @@ struct SaveReportTests {
         }
     }
 }
+
+/// When the iCloud copy was written.
+///
+/// Two audiences in one line: the relative half answers "is this the game I
+/// was playing at lunch?", and the absolute half settles an argument between
+/// two devices — which is why somebody would be reading this screen closely in
+/// the first place.
+@Suite("iCloud save timestamp")
+struct SaveTimestampTests {
+    private let pacific = TimeZone(identifier: "America/Los_Angeles")!
+    private let english = Locale(identifier: "en_US")
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    private func report(
+        saved: Date? = nil,
+        snapshot: Date? = nil,
+        fromSnapshot: Bool = false,
+        cloud: SaveSync.CloudStatus = .present
+    ) -> SaveReport {
+        SaveReport(gate: .cached, cloud: cloud, battery: .useRemote,
+                   snapshotFromCloud: fromSnapshot,
+                   cloudSaveModified: saved, cloudSnapshotModified: snapshot)
+    }
+
+    private func ago(_ seconds: TimeInterval) -> Date {
+        now.addingTimeInterval(-seconds)
+    }
+
+    @Test("Nothing from iCloud means no timestamp at all")
+    func noDate() {
+        #expect(report(cloud: .empty).savedAt(now: now) == nil)
+    }
+
+    /// The point of the line: a player recognising their own session.
+    @Test("Relative time reads the way a person would say it")
+    func relativeWording() {
+        let cases: [(TimeInterval, String)] = [
+            (10, "just now"),
+            (60, "1 minute ago"),
+            (25 * 60, "25 minutes ago"),
+            (3600, "1 hour ago"),
+            (5 * 3600, "5 hours ago"),
+            (26 * 3600, "yesterday"),
+            (3 * 86400, "3 days ago"),
+            (8 * 86400, "last week"),
+            (20 * 86400, "2 weeks ago"),
+            (400 * 86400, "a year ago"),
+        ]
+        for (seconds, expected) in cases {
+            #expect(SaveReport.relative(from: ago(seconds), to: now) == expected,
+                    "\(seconds)s should read \"\(expected)\"")
+        }
+    }
+
+    /// Two devices whose clocks disagree is ordinary; a save from the future is
+    /// not something to render as "in -3 hours".
+    @Test("A save written in the future reads as just now, not as negative time")
+    func futureSave() {
+        #expect(SaveReport.relative(from: now.addingTimeInterval(9000), to: now)
+            == "just now")
+    }
+
+    @Test("The absolute half names the zone it is written in")
+    func absoluteIsLabelled() {
+        let line = report(saved: ago(3 * 3600))
+            .savedAt(now: now, timeZone: pacific, locale: english)
+        #expect(line?.hasPrefix("3 hours ago — ") == true)
+        // Whatever the date format, the zone must be named or the clock time
+        // means nothing on a device in another country.
+        #expect(line?.contains("PDT") == true || line?.contains("PST") == true)
+    }
+
+    /// The invariant behind "local time zone if possible, UTC otherwise".
+    ///
+    /// It needs no fallback code, and an earlier version of this test pretended
+    /// otherwise: it asserted a UTC branch that could never run, and passed
+    /// vacuously through its own `||`. Every zone names itself — an odd offset
+    /// returns `GMT+0:07` — and a device that knows no zone gets GMT from
+    /// Foundation and prints GMT. So the real thing worth guarding is that a
+    /// clock reading is *never* shown unlabelled.
+    @Test("Every zone labels itself, including odd offsets and GMT")
+    func clockTimeIsNeverUnlabelled() throws {
+        let zones = try [TimeZone(secondsFromGMT: 7 * 60)!,   // GMT+0:07
+                         #require(TimeZone(secondsFromGMT: 0)),        // GMT
+                         #require(TimeZone(identifier: "Asia/Kathmandu")),
+                         pacific]
+        for zone in zones {
+            let line = report(saved: ago(3600))
+                .savedAt(now: now, timeZone: zone, locale: english)
+            let label = zone.abbreviation(for: ago(3600))
+            #expect(label != nil, "\(zone.identifier) named itself as nil")
+            #expect(line?.hasSuffix(" " + (label ?? "UTC")) == true,
+                    "unlabelled clock time for \(zone.identifier): \(line ?? "nil")")
+        }
+    }
+
+    /// The snapshot is the newer and more specific thing — where the player
+    /// actually was, not where the game last recorded them.
+    @Test("A resumed snapshot's time wins over the battery save's")
+    func snapshotWins() {
+        let r = report(saved: ago(10 * 3600), snapshot: ago(3600), fromSnapshot: true)
+        #expect(r.cloudDate == ago(3600))
+        #expect(r.savedAt(now: now, timeZone: pacific, locale: english)?
+            .hasPrefix("1 hour ago") == true)
+    }
+
+    @Test("Without a snapshot the battery save's time is used")
+    func batterySaveUsed() {
+        let r = report(saved: ago(10 * 3600), snapshot: ago(3600), fromSnapshot: false)
+        #expect(r.cloudDate == ago(10 * 3600))
+    }
+}

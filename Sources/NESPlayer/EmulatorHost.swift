@@ -167,6 +167,7 @@ public final class EmulatorHost: ObservableObject {
     private var batteryResolution: SaveSync.Resolution = .noSave
     private var remoteAtLoad: SaveSync.Version?
     private var tookCloudSnapshot = false
+    private var cloudSnapshotDate: Date?
 
     private let autoResumeURL: URL?
     private var framesSinceAutoResume = 0
@@ -240,7 +241,9 @@ public final class EmulatorHost: ObservableObject {
             gate: cloudGate,
             cloud: SaveSync.status(of: self.saveSync, holding: remoteAtLoad),
             battery: batteryResolution,
-            snapshotFromCloud: resumedFromCloud)
+            snapshotFromCloud: resumedFromCloud,
+            cloudSaveModified: remoteAtLoad?.modified,
+            cloudSnapshotModified: resumedFromCloud ? cloudSnapshotDate : nil)
         remoteAtLoad = nil
     }
 
@@ -273,6 +276,7 @@ public final class EmulatorHost: ObservableObject {
             if choice == .useRemote {
                 state = remoteState
                 tookCloudSnapshot = true
+                cloudSnapshotDate = remote.modified
                 Log.state.notice("auto-resume: taking the iCloud snapshot")
             }
         }
