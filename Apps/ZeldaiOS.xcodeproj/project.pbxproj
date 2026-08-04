@@ -64,6 +64,7 @@
 				AA0000000000000000000007 /* Sources */,
 				AA0000000000000000000008 /* Frameworks */,
 				AA0000000000000000000009 /* Resources */,
+				AA0000000000000000000020 /* Stamp git commit */,
 			);
 			buildRules = (
 			);
@@ -128,6 +129,24 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		AA0000000000000000000020 /* Stamp git commit */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Stamp git commit";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Stamps the git commit into Info.plist so the diagnostics overlay can say\n# which source this binary came from. Nothing in a compiled binary knows\n# this otherwise, and \"is the device running my fix?\" is otherwise a guess.\n#\n# Runs before signing, so editing the plist here is safe.\nset -e\ncd \"$SRCROOT/..\"\nCOMMIT=$(git rev-parse --short HEAD 2>/dev/null || true)\nif [ -z \"$COMMIT\" ]; then\n  echo \"note: no git checkout; leaving GitCommit unset\"\n  exit 0\nfi\n# A '+' is the difference between \\\"exactly that commit\\\" and \\\"that commit\n# plus whatever was in my editor\\\", and only one is worth quoting in a report.\nif ! git diff --quiet HEAD 2>/dev/null; then\n  COMMIT=\"${COMMIT}+\"\nfi\nPLIST=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n/usr/libexec/PlistBuddy -c \"Add :GitCommit string $COMMIT\" \"$PLIST\" 2>/dev/null \\\n  || /usr/libexec/PlistBuddy -c \"Set :GitCommit $COMMIT\" \"$PLIST\"\necho \"note: GitCommit $COMMIT\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		AA0000000000000000000007 /* Sources */ = {

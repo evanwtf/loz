@@ -30,10 +30,30 @@ public enum BuildInfo {
         #endif
     }
 
+    /// The git commit this was built from, e.g. `6b2c68a` or `6b2c68a+` when
+    /// the tree had uncommitted changes.
+    ///
+    /// Stamped into `Info.plist` by a build phase in each app project, because
+    /// nothing in a compiled binary knows this otherwise. That means it is
+    /// present in the apps and absent from SwiftPM builds (`zeldamac`, tests),
+    /// which have no `Info.plist` — and absent is the honest answer there
+    /// rather than a number that might be stale.
+    ///
+    /// The `+` matters more than the hash on a development build: it is the
+    /// difference between "this is exactly that commit" and "this is that
+    /// commit plus whatever was in my editor", and only one of those is worth
+    /// quoting in a bug report.
+    public static var commit: String {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: "GitCommit")
+            as? String, !value.isEmpty, value != "$(GIT_COMMIT)"
+        else { return "—" }
+        return value
+    }
+
     /// When the binary was linked, taken from the executable's modification
-    /// date. Not a git commit — that would need a build phase in every app
-    /// project — but it answers the question that actually gets asked, which is
-    /// whether this is the build from a minute ago or from this morning.
+    /// date. Complements `commit`: the hash says *what* was built and this says
+    /// *when*, which together answer "is the device running what I just
+    /// installed?" even when the hash has not moved between two builds.
     public static var built: Date? {
         guard let url = Bundle.main.executableURL,
               let attributes = try? FileManager.default
@@ -58,13 +78,14 @@ public enum BuildInfo {
 
     /// Compact one-line form.
     public static var short: String {
-        "\(identity) · \(builtStamp)"
+        "\(identity) · \(commit) · \(builtStamp)"
     }
 
     /// Fuller form for the log, written once at launch so every captured log
     /// says which build produced it.
     public static var summary: String {
         let stamp = built.map(ISO8601DateFormatter().string(from:)) ?? "unknown"
-        return "version \(version) build \(build) \(configuration) linked \(stamp)"
+        return "version \(version) build \(build) \(configuration) "
+            + "commit \(commit) linked \(stamp)"
     }
 }
