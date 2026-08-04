@@ -162,6 +162,10 @@ public final class EmulatorHost: ObservableObject {
     /// written or pushed again three seconds later. See `saveBatterySave()`.
     private var lastPersistedSave: [UInt8]?
 
+    /// Regions of PRG-RAM the game uses as scratch, sorted and disjoint, so
+    /// the save-changed comparison can skip them.
+    private let volatilePRGRAM: [Range<Int>]
+
     /// What the launch found, for the iCloud loading screen to report.
     ///
     /// Deliberately not `@Published`: it is written once during `init` and read
@@ -231,6 +235,7 @@ public final class EmulatorHost: ObservableObject {
         self.saveURL = cartridge.hasBattery ? saveURL : nil
         self.saveSync = cartridge.hasBattery ? saveSync : nil
         self.snapshotSync = snapshotSync
+        volatilePRGRAM = G.volatilePRGRAM.sorted { $0.lowerBound < $1.lowerBound }
         autoResumeURL = AutoResume.url(for: G.romResourceName)
         isMuted = LaunchOptions.startMuted
 
@@ -627,6 +632,34 @@ public final class EmulatorHost: ObservableObject {
             "battery save: \(verdict, privacy: .public) (icloud: \(cloud, privacy: .public))")
     }
 
+    /// Whether the *save data* in battery RAM differs from what was last
+    /// written, ignoring the regions the game uses as scratch.
+    ///
+    /// Comparing the whole array looked right and was not: Zelda caches screen
+    /// data in battery-backed RAM, so every screen transition read as a save
+    /// and the player was told their game had been saved to iCloud each time
+    /// they walked through a doorway. See `GameDefinition.volatilePRGRAM`.
+    private func batterySaveChanged(_ bytes: [UInt8]) -> Bool {
+        guard let last = lastPersistedSave else { return true }
+        guard bytes.count == last.count else { return true }
+
+        // Walk the gaps between the volatile ranges, which are sorted and
+        // disjoint, comparing everything they do not cover.
+        var index = 0
+        for range in volatilePRGRAM {
+            while index < min(range.lowerBound, bytes.count) {
+                if bytes[index] != last[index] { return true }
+                index += 1
+            }
+            index = max(index, range.upperBound)
+        }
+        while index < bytes.count {
+            if bytes[index] != last[index] { return true }
+            index += 1
+        }
+        return false
+    }
+
     /// Persists battery RAM, if the game has actually written any since last
     /// time.
     ///
@@ -643,7 +676,10 @@ public final class EmulatorHost: ObservableObject {
     /// method match the intent its comment always claimed.
     public func saveBatterySave() {
         let bytes = nes.cartridge.prgRAM
-        guard bytes != lastPersistedSave else { return }
+        guard batterySaveChanged(bytes) else { return }
+        // The whole array is kept, scratch included: the cartridge's battery
+        // backs all of PRG-RAM, and the comparison above is about deciding
+        // *when* to write, not about what to write.
         lastPersistedSave = bytes
 
         // Having nowhere local to write must not stop the push. It used to:

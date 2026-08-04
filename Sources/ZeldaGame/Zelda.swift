@@ -15,6 +15,33 @@ public enum Zelda: GameDefinition {
     public static let expectedROMHash =
         "89232edf4f9b52e3cb872094bc78973de080befca2ddea893b6e936066514d4e"
 
+    /// The part of battery-backed PRG-RAM the game scribbles on while playing.
+    ///
+    /// The whole 8 KB at `$6000` is battery-backed and all of it is persisted,
+    /// but only some of it is save data. This window is a screen cache, and
+    /// treating a write to it as a save meant "Game saved to iCloud" appeared
+    /// every time the player walked to a new screen.
+    ///
+    /// Measured rather than assumed, and the assumption it replaced was wrong:
+    /// the symbol map labels `$6000`/`$6300`/`$6600` as the three save slots,
+    /// which reads as though the durable data spans `$6000-$68FF` — but the
+    /// bytes that move during play sit *inside* that span.
+    ///
+    /// From `docs/scripts/boot-to-overworld.txt`, diffing `prgRAM` between
+    /// snapshots:
+    ///
+    /// | Activity | Bytes changed |
+    /// |---|---|
+    /// | Standing still for 600 frames | 0 |
+    /// | Walking across screen boundaries | 240, all in `$6536-$67E9` |
+    /// | Walking further | 0 — the same cache is reused |
+    /// | Anything below `$6500` | never |
+    ///
+    /// So a real save is detected by everything outside this range. A save
+    /// that touched *only* these bytes would be missed, which is implausible:
+    /// writing a file record means writing its name, hearts, and items too.
+    public static let volatilePRGRAM: [Range<Int>] = [0x0536..<0x07EA]
+
     /// RAM locations recovered so far.
     ///
     /// Found empirically by diffing save states across a known action — walk
