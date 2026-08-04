@@ -451,14 +451,31 @@ public final class EmulatorHost: ObservableObject {
             snapshot.worstGapMS = worstMS
             snapshot.lateTicks = late
             diagnostics.profile = snapshot
-            Log.clock.notice("""
-            perf: \(fps, format: .fixed(precision: 1), privacy: .public) fps  \
-            emulate \(emulateMS, format: .fixed(precision: 2), privacy: .public) ms  \
-            render \(renderMS, format: .fixed(precision: 2), privacy: .public) ms  \
-            gap avg \(gapMS, format: .fixed(precision: 2), privacy: .public) ms \
-            worst \(worstMS, format: .fixed(precision: 1), privacy: .public) ms  \
-            late \(late, privacy: .public)/120  budget 16.67 ms
-            """)
+            // A healthy line every two seconds is 1,800 an hour, and it buried
+            // the save and iCloud lines that a log is actually collected to
+            // read. Frame timing is on screen live in the overlay, which is
+            // where it is watched from; the log only needs to speak up when
+            // something is wrong.
+            //
+            // The threshold is 5% of ticks rather than any late tick at all:
+            // one or two per 120 is normal on a healthy device and would have
+            // reintroduced the noise this removes.
+            let unhealthy = late >= 6 || fps < 55
+            // Formatted up front rather than through os_log's interpolation,
+            // because that interpolation only exists inside a log literal and
+            // the level is chosen below.
+            let line = String(
+                format: "perf: %.1f fps  emulate %.2f ms  render %.2f ms  "
+                    + "gap avg %.2f ms worst %.1f ms  late %d/120  budget 16.67 ms",
+                fps, emulateMS, renderMS, gapMS, worstMS, late)
+            if unhealthy {
+                Log.clock.notice("\(line, privacy: .public)")
+            } else {
+                // Still recorded, just not by default. `log show --debug` or
+                // `log config --subsystem wtf.evan.loz --mode level:debug`
+                // brings every sample back when the question is performance.
+                Log.clock.debug("\(line, privacy: .public)")
+            }
             profileEmulation = 0
             profileRender = 0
             profileFrames = 0
