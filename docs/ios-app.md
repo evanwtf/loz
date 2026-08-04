@@ -162,7 +162,7 @@ Three separate mechanisms, each with a different job:
 
 | | What it is |
 |---|---|
-| **Battery save** (`zelda.sav`) | The cartridge's own SRAM — the game's save files. Flushed every ~3 seconds and on exit. |
+| **Battery save** (`zelda.sav`) | The cartridge's own SRAM — the game's save files. Checked every ~3 seconds and on exit, but **only written when it changed**. |
 | **Save states** (4 slots) | Full machine snapshots the player chooses to keep, with thumbnails, in the in-game menu. |
 | **Auto-resume** | An automatic snapshot so the app comes back where it left off. See below. |
 
@@ -173,6 +173,30 @@ on every save, and the **auto-resume snapshot** when the app goes away (not on
 the 20-second timer — 13 KB every twenty seconds is a careless share of a 1 MB
 budget). Both use the identifier pinned in `Zelda.entitlements`, which the phone
 and the Apple TV deliberately *share* so one quest continues on the other.
+
+### "Game saved" notices
+
+A capsule at the top of the screen for two and a half seconds when battery RAM
+is persisted: **Game saved to iCloud**, or **Game saved on this device only** in
+yellow when iCloud could not be reached. The second is worth interrupting for —
+it is the difference between "my other device will have this" and "it won't",
+and unlike most failures the player can act on it.
+
+They land on an event the player already expects, because Zelda writes battery
+RAM at exactly the moments that feel like saving: choosing Save, dying and
+continuing, registering a name.
+
+That is only true because the write is **change-driven**. The caller is a
+three-second timer, and it used to write 8 KB to disk and push 8 KB to iCloud on
+every single tick regardless of whether the game had touched anything — a
+needless write every three seconds forever, into a 1 MB budget shared with every
+other key, from a service that throttles frequent writers. It also made "saved"
+an event with no meaning, since it happened constantly. Comparing the 8 KB
+first costs nothing next to what it avoids, and makes the method do what its own
+comment always claimed.
+
+Nothing is shown in a build that never asked to sync (`zeldamac`): "saved on
+this device" is only news when the other outcome was possible.
 
 ### The iCloud loading screen
 
@@ -372,7 +396,21 @@ Each line answers a question that was, at some point, unanswerable:
 | `touch` | UIKit delivery: finger → app. |
 | `gest` | Handler: delivery → the code that presses the button. |
 | `pad` | What the machine currently thinks is held. |
-| build identity | Whether the phone is running the fix you just installed. |
+| build identity | Version, build number, and configuration. |
+| git commit | Which source this binary came from — `6b2c68a`, or `6b2c68a+` when the tree had uncommitted changes. |
+| build stamp | When the binary was linked. |
+
+Those last three answer "is the device running the fix you just installed?",
+which is otherwise unanswerable while holding the device. The commit is the one
+worth pasting into a bug report; the timestamp only distinguishes builds for
+the person who made them, and the **`+`** is the difference between "exactly
+that commit" and "that commit plus whatever was in my editor".
+
+The hash is stamped into `Info.plist` by a build phase in each app project,
+because nothing in a compiled binary knows it otherwise. That means it shows in
+the apps and reads `—` in SwiftPM builds (`zeldamac`), which have no
+`Info.plist` — absent being the honest answer there rather than a number that
+might be stale.
 
 The distinctions matter more than any single value. Chasing one input bug, the
 frame clock reported a flawless 60 fps with no late ticks throughout, while a

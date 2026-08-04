@@ -153,6 +153,12 @@ public struct EmulatorView: View {
             .overlay(alignment: .topTrailing) {
                 if !showMenu { menuButton }
             }
+            // Top-centre is the one bit of chrome-free edge on every platform:
+            // diagnostics sit topLeading, the menu button topTrailing, and the
+            // tvOS controller hint at the bottom.
+            .overlay(alignment: .top) {
+                SaveToast(notices: host.notices)
+            }
             .overlay {
                 if showMenu {
                     GameMenu(host: host, store: store,
@@ -412,6 +418,11 @@ struct DiagnosticsOverlay: View {
             // landscape control column.
             Text(BuildInfo.identity)
                 .foregroundStyle(.green.opacity(0.7))
+            // The commit is the version of this block that can be pasted into
+            // a bug report; the timestamp only distinguishes builds for the
+            // person who made them.
+            Text(BuildInfo.commit)
+                .foregroundStyle(.green.opacity(0.7))
             Text(BuildInfo.builtStamp)
                 .foregroundStyle(.green.opacity(0.7))
             if host.speedMultiplier > 1 {
@@ -425,5 +436,40 @@ struct DiagnosticsOverlay: View {
         .padding(8)
         .background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
         .padding(8)
+    }
+}
+
+/// A brief "game saved" message.
+///
+/// A separate view observing `SaveNoticeStream` rather than the host, so a save
+/// invalidates this and nothing else — the same reason `DiagnosticsOverlay` and
+/// `GameScreen` observe their own objects.
+struct SaveToast: View {
+    @ObservedObject var notices: SaveNoticeStream
+
+    var body: some View {
+        Group {
+            if let notice = notices.latest {
+                Label(notice.message, systemImage: notice.symbol)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(notice.isWarning ? .yellow : .white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(.black.opacity(0.7), in: Capsule())
+                    .padding(.top, 12)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    // Keyed on the notice, so a save arriving while one is
+                    // still up restarts the clock instead of inheriting the
+                    // remainder of the old one.
+                    .task(id: notice.id) {
+                        try? await Task.sleep(for: .seconds(2.5))
+                        notices.clear(notice)
+                    }
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: notices.latest)
+        // It is a message, not a control; letting it eat touches would make it
+        // a small dead zone that drifts over the picture every few minutes.
+        .allowsHitTesting(false)
     }
 }

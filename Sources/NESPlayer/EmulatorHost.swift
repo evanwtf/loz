@@ -154,6 +154,14 @@ public final class EmulatorHost: ObservableObject {
     /// closed the app, as opposed to where the *game* thinks they are.
     private let snapshotSync: SaveSync?
 
+    /// Brief "game saved" messages for the player, on their own object so a
+    /// save does not invalidate every view observing the host.
+    public let notices = SaveNoticeStream()
+
+    /// Battery RAM as last written out, so an unchanged cartridge is not
+    /// written or pushed again three seconds later. See `saveBatterySave()`.
+    private var lastPersistedSave: [UInt8]?
+
     /// What the launch found, for the iCloud loading screen to report.
     ///
     /// Deliberately not `@Published`: it is written once during `init` and read
@@ -234,6 +242,12 @@ public final class EmulatorHost: ObservableObject {
         """)
 
         loadBatterySave()
+        // Baseline before anything can change it, so the first three-second
+        // tick does not announce a save the player did not make. Taken here
+        // rather than after the resume below on purpose: a snapshot carries its
+        // own battery RAM, and if it differs from the file then the file is
+        // stale and should be brought up to date on the next tick.
+        lastPersistedSave = nes.cartridge.prgRAM
         let resumedFromCloud = restoreAutoResume() && tookCloudSnapshot
         renderCurrentFrame()
 
@@ -592,15 +606,36 @@ public final class EmulatorHost: ObservableObject {
             "battery save: \(verdict, privacy: .public) (icloud: \(cloud, privacy: .public))")
     }
 
+    /// Persists battery RAM, if the game has actually written any since last
+    /// time.
+    ///
+    /// The comparison is the whole of this method. The caller is a three-second
+    /// timer, but the *game* touches battery RAM only when the player saves,
+    /// dies and continues, or registers a name — so without it every tick wrote
+    /// 8 KB to disk and pushed 8 KB to iCloud regardless of whether anything
+    /// had changed. That is a needless write every three seconds forever, into
+    /// a 1 MB budget shared with every other key, and iCloud throttles frequent
+    /// writers. It also made "saved" an event with no meaning, since it
+    /// happened constantly.
+    ///
+    /// Comparing 8 KB is nothing next to what it avoids, and it makes the
+    /// method match the intent its comment always claimed.
     public func saveBatterySave() {
         let bytes = nes.cartridge.prgRAM
-        guard let saveURL else { return }
+        guard let saveURL, bytes != lastPersistedSave else { return }
+        lastPersistedSave = bytes
+
         try? Data(bytes).write(to: saveURL, options: .atomic)
 
-        // Pushed on every save rather than only on backgrounding: a save is
-        // already a deliberate, infrequent act — the game writes battery RAM
-        // when the player saves or dies, not per frame.
-        saveSync?.write(bytes, modified: Date())
+        // Nothing to say in a build that never asked to sync; "saved on this
+        // device" is only news when the other outcome was possible.
+        guard let saveSync else { return }
+        if saveSync.isAvailable {
+            saveSync.write(bytes, modified: Date())
+            notices.post(.savedToCloud)
+        } else {
+            notices.post(.savedLocally)
+        }
     }
 
     /// The pair of syncs a shipping app wants: battery save and resume

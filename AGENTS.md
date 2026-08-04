@@ -23,7 +23,7 @@ must stay playable at every step.
 - Swift 6 (`swift-tools-version: 6.0`), SwiftPM; platforms: macOS 14, iOS 17, tvOS 17.
 - No third-party package dependencies; the `nesrun` CLI is hand-rolled on purpose.
 - SwiftUI (`NESPlayer` shell), AVAudioEngine (audio), GameController framework.
-- Tests use swift-testing (`@Test`, `#expect`), not XCTest — 298 tests in 34 suites.
+- Tests use swift-testing (`@Test`, `#expect`), not XCTest — 305 tests in 35 suites.
 - swiftformat (`.swiftformat`) for lint. CI (`.github/workflows/ci.yml`) runs three
   jobs on a self-hosted macOS ARM64 runner: build+test+release+CLI smoke, lint,
   and an iOS simulator build.
