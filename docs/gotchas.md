@@ -31,6 +31,45 @@ what it actually got.
 The general shape: **a resampler is the wrong fix for a rate mismatch you
 control.** Generate at the rate the hardware wants.
 
+## Application Support does not exist on tvOS
+
+The Apple TV read the iCloud save at every launch and never wrote one. A quest
+saved on it vanished; a quest from another device reappeared in its place. It
+presented as an iCloud bug and was not one.
+
+Every save path started from the same directory:
+
+```swift
+FileManager.default.url(for: .applicationSupportDirectory, ...)
+```
+
+**tvOS does not permit that.** An app may write to Caches and tmp; Application
+Support cannot even be created. Every call site wrapped the attempt in `try?`,
+so the failure became a nil URL rather than an error, and a nil URL made three
+separate features exit at their first guard — battery save, auto-resume, and
+the four save-state slots — silently, for the entire life of the tvOS app.
+
+Worse, the battery save's guard read `guard let saveURL, ...`, so **having
+nowhere local to write also disabled the iCloud push.** The one platform that
+guarantees no persistent local storage was therefore the one platform excluded
+from the syncing that exists because of it.
+
+Two rules come out of this:
+
+- **A platform-specific directory is a platform-specific decision.** Route it
+  through one place (`SaveLocation`) rather than repeating the call at each
+  site, or the next feature repeats the bug.
+- **Local storage failing must not disable remote storage.** They are separate
+  failures with separate consequences, and on tvOS the cloud copy is the
+  record while the local file is a convenience.
+
+It took an on-screen counter to find, because the log was unreachable: `log
+collect` from a paired Apple TV needs root and then fails with "Device not
+configured". `save 0@- sync 0@- never` in the diagnostics overlay is what
+pointed at the guard. The frozen timestamp on the loading screen — the same
+6:11 PM across three hours and several saves — is what proved nothing was
+being written.
+
 ## `-O` is not `-Ounchecked`, and the gap is 3.5x
 
 `Package.swift` builds `NESCore` with `-Ounchecked` in release and `-O` in

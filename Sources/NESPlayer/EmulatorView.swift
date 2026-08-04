@@ -338,6 +338,23 @@ struct DiagnosticsOverlay: View {
     var wide = false
 
     /// Pressed buttons as letters, or a dash when nothing is held.
+    /// "save 2@14s  sync 2@14s handed" — how many times the game has written
+    /// battery RAM this session, and how many of those left the device.
+    ///
+    /// The counts are the point. `save 2  sync 0` says this device never
+    /// pushed; `save 2  sync 2` says it did and anything stale came back from
+    /// somewhere else. A single "last saved" reading cannot separate those,
+    /// and separating them is usually the whole question.
+    private static func saveDescription(_ activity: SaveActivity) -> String {
+        func ago(_ date: Date?) -> String {
+            guard let date else { return "-" }
+            let seconds = Int(Date().timeIntervalSince(date))
+            return seconds < 60 ? "\(seconds)s" : "\(seconds / 60)m"
+        }
+        return "save \(activity.saves)@\(ago(activity.lastSave))  "
+            + "sync \(activity.syncs)@\(ago(activity.lastSync)) \(activity.sync.rawValue)"
+    }
+
     private static func padDescription(_ buttons: NESButton) -> String {
         let names: [(NESButton, String)] = [
             (.up, "U"), (.down, "D"), (.left, "L"), (.right, "R"),
@@ -412,6 +429,15 @@ struct DiagnosticsOverlay: View {
             // the press never arriving and the game ignoring it; this splits
             // those apart without a debugger or a cable.
             Text("pad \(Self.padDescription(host.nes.controller1.buttons))")
+            // The save path, on screen because its log is unreachable: on a
+            // paired Apple TV `log collect` fails outright. Two counters
+            // rather than one, because a save and its push fail
+            // independently and the two disagreeing is the answer.
+            Text(Self.saveDescription(stream.saveActivity))
+                .foregroundStyle(
+                    stream.saveActivity.saves > 0
+                        && stream.saveActivity.syncs < stream.saveActivity.saves
+                        ? .yellow : .green.opacity(0.7))
             // Which build this is. Saves guessing whether a fix is actually on
             // the device, which is otherwise unanswerable from the device.
             // Split across two lines so the block stays narrow enough for the

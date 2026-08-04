@@ -197,3 +197,150 @@ private final class RefusingStore: KeyValueStore {
     @discardableResult
     func synchronize() -> Bool { false }
 }
+
+/// A device that gives the app nowhere to write must still sync.
+///
+/// This was the tvOS bug in miniature. `saveBatterySave` guarded on
+/// `let saveURL` before doing anything, so a platform with no writable
+/// directory silently lost iCloud syncing as well — and that platform was the
+/// Apple TV, whose entire reason for syncing is that it guarantees no
+/// persistent local storage. The device read the cloud copy at every launch
+/// and never wrote one.
+@Suite("Syncing without local storage", .serialized)
+@MainActor
+struct NoLocalStorageTests {
+    @Test("With no save file, the save still reaches iCloud")
+    func pushesWithoutAFile() throws {
+        let store = FakeKeyValueStore()
+        let host = try EmulatorHost(
+            game: BatteryTestGame.self,
+            romData: BatteryTestGame.romImage,
+            saveURL: nil,
+            saveSync: SaveSync(store: store, key: "b"))
+        host.autoResumeEnabled = false
+
+        host.nes.cartridge.prgRAM[0] = 0x42
+        host.saveBatterySave()
+
+        #expect(store.storage["b"] != nil, "nowhere local to write meant nowhere at all")
+        #expect(host.notices.latest?.kind == .savedToCloud)
+    }
+
+    /// The counter that made the bug visible, and would have made it visible
+    /// years earlier.
+    @Test("The overlay counts the save even with no file to write it to")
+    func countsWithoutAFile() throws {
+        let store = FakeKeyValueStore()
+        let host = try EmulatorHost(
+            game: BatteryTestGame.self,
+            romData: BatteryTestGame.romImage,
+            saveURL: nil,
+            saveSync: SaveSync(store: store, key: "b"))
+        host.autoResumeEnabled = false
+
+        host.nes.cartridge.prgRAM[0] = 0x42
+        host.saveBatterySave()
+
+        #expect(host.diagnostics.saveActivity.saves == 1)
+        #expect(host.diagnostics.saveActivity.syncs == 1)
+        #expect(host.diagnostics.saveActivity.sync == .handed)
+    }
+}
+
+/// A game whose battery RAM has a scratch window, like Zelda's screen cache.
+enum ScratchTestGame: GameDefinition {
+    static let title = "Scratch Test Game"
+    static let romResourceName = "loz-scratch-\(UUID().uuidString.prefix(8))"
+    static let expectedMapper = 0
+    static let expectedROMHash = ROMHash.hex(of: BatteryTestGame.romImage)
+    static let volatilePRGRAM: [Range<Int>] = [0x0536..<0x07EA]
+}
+
+/// Not every write to battery RAM is a save.
+///
+/// A cartridge's battery backs the whole of PRG-RAM, but only part of it is
+/// save data — Zelda caches screen data in there too. Comparing the whole
+/// array meant walking through a doorway told the player their game had been
+/// saved to iCloud, every time.
+@Suite("Scratch writes are not saves", .serialized)
+@MainActor
+struct VolatilePRGRAMTests {
+    private func makeHost(_ store: FakeKeyValueStore) throws -> EmulatorHost {
+        let host = try EmulatorHost(
+            game: ScratchTestGame.self,
+            romData: BatteryTestGame.romImage,
+            saveURL: nil,
+            saveSync: SaveSync(store: store, key: "b"))
+        host.autoResumeEnabled = false
+        return host
+    }
+
+    /// The bug, in one assertion.
+    @Test("A write inside the scratch window is not reported as a save")
+    func scratchWriteIsIgnored() throws {
+        let store = FakeKeyValueStore()
+        let host = try makeHost(store)
+
+        // 0x536 is the first byte the screen cache was measured to touch.
+        host.nes.cartridge.prgRAM[0x0536] = 0x99
+        host.nes.cartridge.prgRAM[0x07E9] = 0x99
+        host.saveBatterySave()
+
+        #expect(host.notices.latest == nil)
+        #expect(host.diagnostics.saveActivity.saves == 0)
+    }
+
+    @Test("A write outside the scratch window is a save")
+    func realWriteCounts() throws {
+        let store = FakeKeyValueStore()
+        let host = try makeHost(store)
+
+        host.nes.cartridge.prgRAM[0x0100] = 0x99
+        host.saveBatterySave()
+
+        #expect(host.diagnostics.saveActivity.saves == 1)
+        #expect(host.notices.latest?.kind == .savedToCloud)
+    }
+
+    /// The boundaries are where an off-by-one would hide, and an off-by-one
+    /// here means either a missed save or a spurious one.
+    @Test("The bytes either side of the window still count as a save")
+    func boundariesAreExclusive() throws {
+        for offset in [0x0535, 0x07EA] {
+            let host = try makeHost(FakeKeyValueStore())
+            host.nes.cartridge.prgRAM[offset] = 0x99
+            host.saveBatterySave()
+            #expect(host.diagnostics.saveActivity.saves == 1,
+                    "offset 0x\(String(offset, radix: 16)) should count")
+        }
+    }
+
+    /// Scratch churn must not mask a real save that happens alongside it,
+    /// which is the normal case: the player saves *and* the screen changes.
+    @Test("A real save is still seen when scratch changed too")
+    func realWriteBesideScratch() throws {
+        let host = try makeHost(FakeKeyValueStore())
+
+        host.nes.cartridge.prgRAM[0x0600] = 0x99   // inside the window
+        host.nes.cartridge.prgRAM[0x0010] = 0x99   // outside it
+        host.saveBatterySave()
+
+        #expect(host.diagnostics.saveActivity.saves == 1)
+    }
+
+    /// A game that has measured nothing keeps the old behaviour.
+    @Test("With no scratch declared, any change is a save")
+    func noVolatileRangesComparesEverything() throws {
+        let host = try EmulatorHost(
+            game: BatteryTestGame.self,
+            romData: BatteryTestGame.romImage,
+            saveURL: nil,
+            saveSync: SaveSync(store: FakeKeyValueStore(), key: "b"))
+        host.autoResumeEnabled = false
+
+        host.nes.cartridge.prgRAM[0x0600] = 0x99
+        host.saveBatterySave()
+
+        #expect(host.diagnostics.saveActivity.saves == 1)
+    }
+}

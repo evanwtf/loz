@@ -31,21 +31,7 @@ public final class SaveStateStore: ObservableObject {
     public init(gameName: String, romHash: String) {
         self.romHash = romHash
 
-        let base = try? FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true)
-
-        directory = base?
-            .appendingPathComponent("loz", isDirectory: true)
-            .appendingPathComponent("states", isDirectory: true)
-            .appendingPathComponent(gameName, isDirectory: true)
-
-        if let directory {
-            try? FileManager.default.createDirectory(
-                at: directory, withIntermediateDirectories: true)
-        }
+        directory = SaveLocation.directory("loz", "states", gameName)
 
         slots = (0..<Self.slotCount).map { Slot(index: $0) }
         refresh()
