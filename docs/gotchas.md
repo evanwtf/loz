@@ -37,6 +37,10 @@ The Apple TV read the iCloud save at every launch and never wrote one. A quest
 saved on it vanished; a quest from another device reappeared in its place. It
 presented as an iCloud bug and was not one.
 
+This was one of three stacked bugs; [saves.md](saves.md#three-stacked-bugs-none-of-them-icloud)
+has all three together, since each alone would have been enough to break saving
+on that platform.
+
 Every save path started from the same directory:
 
 ```swift

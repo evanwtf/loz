@@ -1,6 +1,6 @@
 # Testing
 
-261 tests across 28 suites, using swift-testing. `swift test` runs in ~10s —
+313 tests across 37 suites, using swift-testing. `swift test` runs in ~11s —
 most of which is the four `Host input path` and seven `Auto-resume` tests
 sharing a ten-second budget — so there is no excuse for not running it.
 
@@ -17,7 +17,8 @@ timing.
 
 ## Suites
 
-Twenty-eight suites across twenty-three files — `APUTests.swift` declares three.
+Thirty-seven suites across twenty-six files — several files declare more than
+one, and `SaveSyncTests.swift` declares four.
 
 ### `NESCoreTests` — the emulator (156)
 
@@ -38,13 +39,13 @@ Twenty-eight suites across twenty-three files — `APUTests.swift` declares thre
 | `Nametable reading` | 7 | Tile reads honour mirroring; the active table follows control |
 | `CPU: shift and rotate helpers` | 6 | The helpers routines are built from agree with the interpreter |
 
-### `NESAnalysisTests` — the dev-only tooling (29)
+### `NESAnalysisTests` — the dev-only tooling (28)
 
 | Suite | Tests | Guards |
 |---|---|---|
 | `OAM entity reading` | 10 | Sprite decode, clustering into actors, item vs enemy |
 | `Room clear monitor` | 6 | When "the room is empty" may be believed |
-| `Tile grid pathfinding` | 9 | A* routes round walls, and reports no route rather than a bad one |
+| `Tile grid pathfinding` | 8 | A* routes round walls, and reports no route rather than a bad one |
 | `Route to input script` | 4 | A route becomes the same script syntax `play` already takes |
 
 Every case in that suite is a mistake the harness actually made. Reading OAM
@@ -52,16 +53,32 @@ looks trivial and is not: status bar sprites became phantom targets, and a
 dropped key classified as an enemy cost 552 sword swings against an item that
 only had to be walked onto.
 
-### `NESPlayerTests` — the app shell (42)
+### `NESPlayerTests` — the app shell (94)
 
 | Suite | Tests | Guards |
 |---|---|---|
 | `On-screen control layout` | 13 | Controls fit the screen in **both** orientations; d-pad hit regions |
-| `Auto-resume` | 7 | Snapshots round-trip; foreign and corrupt ones are refused |
 | `Host input path` | 4 | A button pressed through `EmulatorHost` reaches the game |
 | `Silent when headless` | 4 | A host nobody started never opens the audio device |
+| `Auto-resume` | 7 | Snapshots round-trip; foreign and corrupt ones are refused |
 | `Save sync resolution` | 10 | Which copy of a quest wins when two devices disagree |
-| `Save sync store` | 4 | Round trip, empty and corrupt stores, unavailable iCloud |
+| `Save sync store` | 5 | Round trip, empty and corrupt stores, unavailable iCloud |
+| `Cloud status` | 4 | `off` / `unavailable` / `empty` / `present` are distinguished |
+| `Snapshot sync` | 5 | The resume snapshot round-trips through the store |
+| `Snapshot resolution by time` | 5 | Newer snapshot wins, within the clock tolerance |
+| `Cloud gate` | 5 | Waiting, delivery, timeout, and unavailable |
+| `iCloud loading screen copy` | 10 | Every state says something true and actionable |
+| `iCloud save timestamp` | 7 | Every time zone labels itself |
+| `Battery save notices` | 8 | The right notice for the right outcome |
+| `Scratch writes are not saves` | 5 | `volatilePRGRAM` suppresses screen-transition noise |
+| `Syncing without local storage` | 2 | The tvOS case: pushing works with no writable file |
+
+**Seventy-three of those ninety-four are saves and syncing**, which is out of
+proportion to the code until you notice that it is the only subsystem where
+being wrong loses somebody's quest, and the only one whose failures were
+invisible on the device they happened on. `Syncing without local storage` and
+`Scratch writes are not saves` are direct regression guards for shipped bugs.
+See [saves.md](saves.md).
 
 `Silent when headless` is a regression guard with an audible failure mode. Until
 it existed, running `swift test` played Zelda through the speakers — eleven

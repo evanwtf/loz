@@ -64,10 +64,23 @@ A `.state` snapshot embeds CHR-RAM, which is cartridge data. Putting it in the u
 
 Implemented. Cartridge battery saves sync through `NSUbiquitousKeyValueStore`.
 
-**What syncs:** the `.sav` only — 8 KB of `prgRAM`, which *is* the quest
-progress (three slots, inventory, dungeons cleared). Snapshots stay local: at
-~61 KB each they are blob-shaped for a key-value store, and a mid-fight moment
-from a phone is an odd thing to resume on a television.
+**What syncs:** the `.sav` — 8 KB of `prgRAM`, which *is* the quest progress
+(three slots, inventory, dungeons cleared) — and, since PR #3, the **auto-resume
+snapshot** as well.
+
+> **Superseded.** This originally read "snapshots stay local", on the reasoning
+> that ~61 KB is blob-shaped for a key-value store and a mid-fight moment from a
+> phone is an odd thing to resume on a television. The size objection turned out
+> to be soft: a snapshot is mostly RAM and CHR-RAM, which zlib takes to **13 KB**.
+> The taste objection was simply wrong — picking up on the TV exactly where the
+> phone left off is the feature people actually wanted from this.
+>
+> The four **manual** save-state slots do still stay local, for the original
+> reasons plus one better one: nobody expects slot 3 on the phone to be slot 3
+> on the TV.
+>
+> Snapshots sync only when the app truly backgrounds, never on the periodic
+> timer — 13 KB every twenty seconds would be a careless share of a 1 MB budget.
 
 **Why key-value and not CloudKit or a document container:** 8 KB against a 1 MB
 budget, identical API on iOS, macOS and tvOS, and no file coordination to get
@@ -95,9 +108,22 @@ clocks differ by a second trade the save back and forth on every launch.
 saves, not an error the player can do anything about.
 
 Verified on device: the entitlement signs in as
-`94S5PZTVPY.wtf.evan.loz.zelda`. 14 tests cover the resolution rules through a
-fake store, so they need no account, entitlement or network.
+`94S5PZTVPY.wtf.evan.loz.zelda`. The resolution rules are covered through a fake
+store, so the tests need no account, entitlement or network — 14 at the time
+this was written, **73 across twelve suites** by `v0.3.0`.
 
 Unblocks [#2](0002-tvos-app-target-for-apple-tv.md) — tvOS gives an app no
 guaranteed persistent local storage, so a quest kept only in its Documents
 directory can be evicted whenever the system wants space.
+
+## What this issue did not anticipate
+
+Shipping it was the easy half. Syncing was correct on the phone from the start
+and completely broken on the Apple TV for three releases, in three stacked ways
+that all presented as iCloud faults and none of which were:
+`.applicationSupportDirectory` cannot be created on tvOS, a nil local URL also
+suppressed the cloud push, and comparing all 8 KB made every screen transition
+look like a save.
+
+The full account is in [saves.md](../saves.md), which exists because this
+subsystem outgrew an issue comment and a section of `ios-app.md`.
