@@ -284,11 +284,25 @@ log stream --predicate 'subsystem == "wtf.evan.loz" AND category == "state"'
 The lines worth waiting for:
 
 ```
-battery save: useRemote (icloud: present)
-auto-resume: pushed 13140 bytes to iCloud
+battery save: useRemote (icloud: present)   ← launch: took the cloud copy
+save: game wrote 8192 bytes to disk         ← the player saved
+sync: handed 8192 bytes to iCloud           ← and it left the device
 auto-resume: taking the iCloud snapshot
 auto-resume: iCloud unavailable, kept the local snapshot only
 ```
+
+The save and the sync are **separate lines on purpose**. They fail
+independently, and the interesting failure is one happening without the other:
+a save with no matching sync is a device that never pushed, which is a very
+different bug from a device that pushed and was overwritten afterwards. One
+combined line cannot tell those apart, and telling them apart is usually the
+whole question.
+
+"Handed to" is deliberate too. `synchronize()` returning true means the value
+is queued with the iCloud daemon — the key-value store gives **no delivery
+confirmation at all**, so anything stronger would be a claim this code cannot
+make. When it returns false, which is what an invalid entitlement produces, the
+line says refused and the toast says local-only rather than reporting success.
 
 **The log alone is not proof.** It shows this device reaching the store; it
 cannot show the other device seeing the same key. Only the round trip does that:

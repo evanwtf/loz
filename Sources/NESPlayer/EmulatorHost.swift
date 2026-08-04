@@ -648,25 +648,38 @@ public final class EmulatorHost: ObservableObject {
 
         try? Data(bytes).write(to: saveURL, options: .atomic)
 
-        // Logged as well as shown. The toast lasts two and a half seconds and
-        // is easy to miss or to be looking away from; the log is what is still
-        // there afterwards, next to the `battery save:` line from launch that
-        // says which copy won. Reading those two together is how you tell
-        // "this device never pushed" from "this device pushed and something
-        // else pushed later".
+        // Two events, logged separately, because they are two things that can
+        // independently fail and the interesting failure is one happening
+        // without the other. "The game saved" and "the save left this device"
+        // reported as one line cannot distinguish a device that never pushed
+        // from one that pushed and was overwritten later.
+        Log.state.notice("save: game wrote \(bytes.count, privacy: .public) bytes to disk")
+
         guard let saveSync else {
-            Log.state.notice(
-                "battery save: wrote \(bytes.count, privacy: .public) bytes locally (no syncing)")
+            Log.state.notice("sync: not enabled in this build; save stays on this device")
             return
         }
-        if saveSync.isAvailable {
-            saveSync.write(bytes, modified: Date())
+        guard saveSync.isAvailable else {
+            notices.post(.savedLocally)
+            Log.state.notice("sync: iCloud unreachable; save stays on this device")
+            return
+        }
+
+        // "handed to" rather than "arrived at" deliberately. A true here means
+        // the value is queued with the iCloud daemon; the key-value store
+        // offers no delivery confirmation, so anything stronger would be a
+        // claim this code cannot make.
+        let accepted = saveSync.write(bytes, modified: Date())
+        if accepted {
             notices.post(.savedToCloud)
             Log.state.notice(
-                "battery save: pushed \(bytes.count, privacy: .public) bytes to iCloud")
+                "sync: handed \(bytes.count, privacy: .public) bytes to iCloud")
         } else {
+            // A refusal here is a real signal — synchronize() returns false
+            // when the entitlement is missing or invalid — and reporting it as
+            // success is how a broken build looks like a working one.
             notices.post(.savedLocally)
-            Log.state.notice("battery save: iCloud unavailable, wrote locally only")
+            Log.state.notice("sync: iCloud refused the write (synchronize returned false)")
         }
     }
 
