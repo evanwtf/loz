@@ -346,7 +346,8 @@ progress at coarse checkpoints — it will not put you back mid-dungeon-room.
 
 | When | Why |
 |---|---|
-| Scene phase `.inactive` and `.background` | The normal path. `.inactive` fires first and is where the system is most generous with time. |
+| Scene phase `.inactive` | Written to disk only. It fires first and is where the system is most generous with time — but tvOS also fires it whenever it wants an app-switcher thumbnail, several times a minute. |
+| Scene phase `.background` | Written **and pushed to iCloud**. This is the one that means the app is actually leaving. |
 | Every 20 seconds while playing | Backstop for cases where no notification arrives: out-of-memory kill, crash, force quit. |
 | On `stop()` | Alongside the cartridge battery save. |
 

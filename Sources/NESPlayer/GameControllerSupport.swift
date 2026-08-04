@@ -8,6 +8,20 @@ import SwiftUI
 /// preferred input everywhere else.
 struct GameControllerSupport: ViewModifier {
     let host: EmulatorHost
+    /// Whether the app's menu is up, in which case the pad belongs to the
+    /// menu rather than to the game.
+    let menuIsOpen: Bool
+
+    /// Opens the app's own menu. Reached by holding the controller's Menu
+    /// button, which on tvOS is the only route to it.
+    let onMenu: () -> Void
+
+    /// Distinguishes a tap of the Menu button from a hold.
+    ///
+    /// A small object rather than two `@State` properties because the
+    /// controller handler is a closure captured once at attach time; it cannot
+    /// see later values of a struct's state.
+    @State private var holdToOpenMenu = MenuHold()
 
     /// Whether any usable gamepad is currently attached. Only surfaced on
     /// tvOS, where it is the difference between "playable" and "appears
@@ -19,6 +33,20 @@ struct GameControllerSupport: ViewModifier {
             .task {
                 attachExisting()
                 await observeConnections()
+            }
+            // Handing the pad back is what makes the menu usable on tvOS.
+            //
+            // Once an app sets `dpad.valueChangedHandler`, the system stops
+            // synthesising focus movement from that controller and gives the
+            // input to the app instead. The game was therefore eating every
+            // d-pad event, and the menu — which is navigated *by* the focus
+            // engine — could never receive one. It opened with the close
+            // button focused and focus could not be moved off it.
+            //
+            // Detaching while the menu is up returns the controller to the
+            // focus engine, and reattaching on close returns it to the game.
+            .onChange(of: menuIsOpen) { _, open in
+                if open { detachHandlers() } else { attachExisting() }
             }
         #if os(tvOS)
             .overlay(alignment: .bottom) {
@@ -46,6 +74,30 @@ struct GameControllerSupport: ViewModifier {
             .padding(.bottom, 60)
         }
     #endif
+
+    /// Releases the controller back to the focus engine, and lets go of
+    /// anything the player was holding — otherwise a direction held as the
+    /// menu opened stays pressed for as long as it is up.
+    private func detachHandlers() {
+        for controller in GCController.controllers() {
+            guard let pad = controller.extendedGamepad else { continue }
+            for button in [pad.buttonA, pad.buttonB, pad.buttonX, pad.buttonY,
+                           pad.buttonMenu, pad.rightShoulder]
+            {
+                button.pressedChangedHandler = nil
+            }
+            pad.buttonOptions?.pressedChangedHandler = nil
+            pad.dpad.valueChangedHandler = nil
+            pad.leftThumbstick.valueChangedHandler = nil
+            if let dualShock = pad as? GCDualShockGamepad {
+                dualShock.touchpadButton.pressedChangedHandler = nil
+            } else if let dualSense = pad as? GCDualSenseGamepad {
+                dualSense.touchpadButton.pressedChangedHandler = nil
+            }
+        }
+        host.releaseAllButtons()
+        host.speedMultiplier = 1
+    }
 
     private func attachExisting() {
         for controller in GCController.controllers() {
@@ -91,7 +143,33 @@ struct GameControllerSupport: ViewModifier {
         pad.buttonX.pressedChangedHandler = press(.b)
         pad.buttonY.pressedChangedHandler = press(.a)
 
-        pad.buttonMenu.pressedChangedHandler = press(.start)
+        // Menu is both buttons it needs to be: a tap is NES START, a hold opens
+        // the app's own menu.
+        //
+        // On tvOS that hold is the *only* way in. The ⋯ button is drawn and the
+        // focus engine can reach it, but with a controller attached the d-pad
+        // is steering Link rather than moving focus, so nothing takes the
+        // player to it — the settings, the save slots and the toggles were
+        // simply unreachable on that platform.
+        //
+        // Menu is the button a tvOS player reaches for, and the cost of sharing
+        // it is that START arrives on release rather than on press. That is
+        // fine for a button used to open the inventory and never in combat.
+        pad.buttonMenu.pressedChangedHandler = { [holdToOpenMenu] _, _, pressed in
+            MainActor.assumeIsolated {
+                if pressed {
+                    holdToOpenMenu.begin()
+                } else if holdToOpenMenu.endedWithoutFiring() {
+                    // A tap: send START as a pulse, since the press half has
+                    // already been swallowed waiting to see if it was a hold.
+                    host.setButton(.start, pressed: true)
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(80))
+                        host.setButton(.start, pressed: false)
+                    }
+                }
+            }
+        }
         pad.buttonOptions?.pressedChangedHandler = press(.select)
 
         let steer: (GCControllerDirectionPad, Float, Float) -> Void = { _, xAxis, yAxis in
@@ -111,5 +189,52 @@ struct GameControllerSupport: ViewModifier {
         pad.rightShoulder.pressedChangedHandler = { _, _, pressed in
             MainActor.assumeIsolated { host.speedMultiplier = pressed ? 4 : 1 }
         }
+
+        // A DualShock or DualSense has one button the NES has no use for: the
+        // touchpad click. It opens the menu outright, with no hold — the whole
+        // problem on tvOS was that nothing obvious did, and a button spare on
+        // the most common controller is the least surprising place to put it.
+        let openMenu: (GCControllerButtonInput, Float, Bool) -> Void = { _, _, pressed in
+            MainActor.assumeIsolated { if pressed { onMenu() } }
+        }
+        if let dualShock = pad as? GCDualShockGamepad {
+            dualShock.touchpadButton.pressedChangedHandler = openMenu
+        } else if let dualSense = pad as? GCDualSenseGamepad {
+            dualSense.touchpadButton.pressedChangedHandler = openMenu
+        }
+
+        holdToOpenMenu.onFire = onMenu
+    }
+}
+
+/// Times how long the Menu button is held, so a tap and a hold can mean
+/// different things.
+@MainActor
+final class MenuHold {
+    /// Long enough not to fire on a quick tap for START, short enough that a
+    /// player who wants the menu does not think it is broken.
+    static let threshold = Duration.milliseconds(500)
+
+    private var fired = false
+    private var pending: Task<Void, Never>?
+    var onFire: (() -> Void)?
+
+    func begin() {
+        fired = false
+        pending?.cancel()
+        pending = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.threshold)
+            guard let self, !Task.isCancelled else { return }
+            fired = true
+            onFire?()
+        }
+    }
+
+    /// True when the button was released before the hold fired — meaning the
+    /// press was a tap, and belongs to the game.
+    func endedWithoutFiring() -> Bool {
+        pending?.cancel()
+        pending = nil
+        return !fired
     }
 }

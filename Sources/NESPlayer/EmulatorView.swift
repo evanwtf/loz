@@ -132,11 +132,20 @@ public struct EmulatorView: View {
         #endif
             .onChange(of: scenePhase) { _, phase in
                 switch phase {
-                case .inactive, .background:
-                    // Snapshot on .inactive as well as .background: it fires
-                    // first and is where the system is most generous with time.
-                    // Writing twice is harmless — the encode is sub-millisecond
-                    // and the write is atomic.
+                case .inactive:
+                    // Locally only. `.inactive` fires first and is where the
+                    // system is most generous with time, so it is still the
+                    // right moment to write a snapshot to disk — but it also
+                    // fires whenever tvOS wants a thumbnail for its app
+                    // switcher, which is several times a minute. Pushing 13 KB
+                    // to iCloud each time was a careless share of a 1 MB
+                    // budget from a service that throttles frequent writers,
+                    // and it bought nothing: the app was not going anywhere.
+                    host.saveBatterySave()
+                    host.saveAutoResume()
+                    host.isPaused = true
+                case .background:
+                    // Actually leaving. This is the one that earns a push.
                     host.persistForBackgrounding()
                     host.isPaused = true
                 case .active:
@@ -175,7 +184,12 @@ public struct EmulatorView: View {
             }
         #endif
             .modifier(KeyboardControls(host: host, showDiagnostics: $showDiagnostics))
-            .modifier(GameControllerSupport(host: host))
+            .modifier(GameControllerSupport(host: host, menuIsOpen: showMenu, onMenu: {
+                guard !showMenu else { return }
+                store.refresh()
+                host.isPaused = true
+                withAnimation(.easeOut(duration: 0.15)) { showMenu = true }
+            }))
         #if os(iOS)
             // Zero-sized and non-interactive: it exists only to reach the
             // window and attach a recogniser that observes touches without
@@ -473,9 +487,14 @@ struct DiagnosticsOverlay: View {
 struct SaveToast: View {
     @ObservedObject var notices: SaveNoticeStream
 
+    /// Off is a legitimate preference: the message is reassurance, and once a
+    /// player trusts their saves it is just something that covers the picture
+    /// every few minutes.
+    @AppStorage("nesSaveNotices") private var showSaveNotices = true
+
     var body: some View {
         Group {
-            if let notice = notices.latest {
+            if let notice = notices.latest, showSaveNotices {
                 Label(notice.message, systemImage: notice.symbol)
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(notice.isWarning ? .yellow : .white)

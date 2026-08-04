@@ -18,6 +18,9 @@ struct GameMenu: View {
     /// Shared with `GameLauncher` by key; the screen it controls is shown
     /// before this menu can exist, so there is nothing to bind through.
     @AppStorage("nesCloudScreen") private var showCloudScreen = true
+    /// Read by `SaveToast` through the same key; the toast is a sibling view
+    /// rather than a child, so there is nothing to bind through.
+    @AppStorage("nesSaveNotices") private var showSaveNotices = true
 
     var body: some View {
         ZStack {
@@ -93,6 +96,9 @@ struct GameMenu: View {
             }
             Toggle(isOn: $showCloudScreen) {
                 Label("iCloud loading screen", systemImage: "icloud")
+            }
+            Toggle(isOn: $showSaveNotices) {
+                Label("\"Game saved\" messages", systemImage: "bell.badge")
             }
             Toggle(isOn: $showDiagnostics) {
                 Label("Diagnostics", systemImage: "waveform.path.ecg")
