@@ -141,6 +141,28 @@ struct SaveNoticeTests {
         #expect(host.notices.latest?.id == first.id, "a second notice was posted")
     }
 
+    /// The case that would otherwise make a broken build look like a working
+    /// one: the store says it is usable, then refuses the write.
+    ///
+    /// Reachable in production, not hypothetical. `UbiquitousKeyValueStore`
+    /// latches `isAvailable` true on the first success, so a later
+    /// `synchronize()` returning false — which is what a missing or invalid
+    /// entitlement produces — arrives after the availability check has already
+    /// passed.
+    @Test("A refused write is reported as local, not as a successful sync")
+    func refusedWriteIsNotSuccess() throws {
+        let file = tempFile()
+        defer { cleanUp(file) }
+        let host = try makeHost(
+            sync: SaveSync(store: RefusingStore(), key: "b"), file: file)
+
+        host.nes.cartridge.prgRAM[0] = 0x42
+        host.saveBatterySave()
+
+        #expect(host.notices.latest?.kind == .savedLocally)
+        #expect(host.notices.latest?.isWarning == true)
+    }
+
     /// A toast that timed out must not take a newer one down with it.
     @Test("Clearing a stale notice leaves a newer one alone")
     func clearingIsIdentityChecked() throws {
@@ -160,4 +182,18 @@ struct SaveNoticeTests {
             == "Game saved on this device only")
         #expect(SaveNotice(kind: .savedToCloud).isWarning == false)
     }
+}
+
+/// Reports itself usable, then refuses every write — the shape a
+/// `UbiquitousKeyValueStore` takes when availability has already latched true
+/// and a later `synchronize()` fails.
+private final class RefusingStore: KeyValueStore {
+    var isAvailable: Bool { true }
+    private var storage: [String: Data] = [:]
+
+    func data(forKey key: String) -> Data? { storage[key] }
+    func set(_ data: Data, forKey key: String) { storage[key] = data }
+
+    @discardableResult
+    func synchronize() -> Bool { false }
 }

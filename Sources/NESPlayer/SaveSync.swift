@@ -231,11 +231,19 @@ public final class SaveSync {
             modified: Date(timeIntervalSince1970: payload.modified))
     }
 
-    public func write(_ data: [UInt8], modified: Date) {
+    /// Hands the save to the store, reporting whether it was accepted.
+    ///
+    /// "Accepted" is the strongest claim available. `synchronize()` returning
+    /// true means the value is queued with the daemon, **not** that it has
+    /// reached iCloud or any other device — the key-value store offers no
+    /// delivery confirmation at all. A caller logging this should say handed
+    /// over, not arrived.
+    @discardableResult
+    public func write(_ data: [UInt8], modified: Date) -> Bool {
         let payload = Payload(data: Data(data), modified: modified.timeIntervalSince1970)
-        guard let encoded = try? JSONEncoder().encode(payload) else { return }
+        guard let encoded = try? JSONEncoder().encode(payload) else { return false }
         store.set(encoded, forKey: key)
-        store.synchronize()
+        return store.synchronize()
     }
 
     /// Timestamp travels with the bytes rather than relying on the store's own

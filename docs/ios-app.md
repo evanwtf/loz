@@ -284,11 +284,25 @@ log stream --predicate 'subsystem == "wtf.evan.loz" AND category == "state"'
 The lines worth waiting for:
 
 ```
-battery save: useRemote (icloud: present)
-auto-resume: pushed 13140 bytes to iCloud
+battery save: useRemote (icloud: present)   ← launch: took the cloud copy
+save: game wrote 8192 bytes to disk         ← the player saved
+sync: handed 8192 bytes to iCloud           ← and it left the device
 auto-resume: taking the iCloud snapshot
 auto-resume: iCloud unavailable, kept the local snapshot only
 ```
+
+The save and the sync are **separate lines on purpose**. They fail
+independently, and the interesting failure is one happening without the other:
+a save with no matching sync is a device that never pushed, which is a very
+different bug from a device that pushed and was overwritten afterwards. One
+combined line cannot tell those apart, and telling them apart is usually the
+whole question.
+
+"Handed to" is deliberate too. `synchronize()` returning true means the value
+is queued with the iCloud daemon — the key-value store gives **no delivery
+confirmation at all**, so anything stronger would be a claim this code cannot
+make. When it returns false, which is what an invalid entitlement produces, the
+line says refused and the toast says local-only rather than reporting success.
 
 **The log alone is not proof.** It shows this device reaching the store; it
 cannot show the other device seeing the same key. Only the round trip does that:
@@ -423,18 +437,19 @@ Likewise `touch` and `gest` are separate because delivery was fine at 13 ms
 while recognition took hundreds of milliseconds — one number healthy, the other
 the entire bug.
 
-A matching `perf:` line goes to the unified log every 120 frames, but at
-**debug level unless something is wrong** — a healthy line every two seconds
-is 1,800 an hour, and it buried the save and iCloud lines a log is usually
-collected to read. It is promoted to `notice` when 6 or more of 120 ticks
-run late, or the rate falls below 55 fps. The threshold is 5% rather than
-any late tick at all because one or two per 120 is normal on a healthy
-device and would have reintroduced the noise. Bring every sample back with
-`log show --debug`, or:
+A `perf:` line goes to the unified log **only when something is wrong** — 6 or
+more of 120 ticks late, or below 55 fps. A healthy line every two seconds is
+1,800 an hour, and it buried the save and iCloud lines a log actually gets
+collected to read.
 
-```sh
-log config --subsystem wtf.evan.loz --mode level:debug
-```
+Demoting them to `debug` was tried first and achieved nothing: **Xcode's
+console shows debug messages**, so the level only filters `log stream` and
+Console.app, not the place the log was being read from. Not emitting is the
+only thing that works everywhere.
+
+Nothing is lost — frame timing is in the overlay continuously, which is where
+it gets watched from. The 5% threshold rather than *any* late tick is because
+one or two per 120 is normal on a healthy Apple TV, measured.
  Note that
 `log collect` from an attached device **requires root**, which makes the log
 unavailable in exactly the situation it is wanted; that is why the numbers are

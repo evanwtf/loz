@@ -451,30 +451,34 @@ public final class EmulatorHost: ObservableObject {
             snapshot.worstGapMS = worstMS
             snapshot.lateTicks = late
             diagnostics.profile = snapshot
-            // A healthy line every two seconds is 1,800 an hour, and it buried
-            // the save and iCloud lines that a log is actually collected to
-            // read. Frame timing is on screen live in the overlay, which is
-            // where it is watched from; the log only needs to speak up when
-            // something is wrong.
+            // Logged only when something is wrong. A healthy line every two
+            // seconds is 1,800 an hour, and it buried the save and iCloud
+            // lines a log actually gets collected to read — badly enough that
+            // a pasted session covered 48 seconds and could not have contained
+            // the one event being looked for.
+            //
+            // Demoting these to `debug` was tried first and did nothing,
+            // because Xcode's console shows debug messages: the level only
+            // filters `log stream` and Console.app defaults, not the place
+            // they were actually being read. Not emitting is the only thing
+            // that works everywhere.
+            //
+            // Nothing is lost. Frame timing is in the diagnostics overlay
+            // continuously, which is where it is watched from, and every
+            // sample is still in `diagnostics.profile` above.
             //
             // The threshold is 5% of ticks rather than any late tick at all:
-            // one or two per 120 is normal on a healthy device and would have
-            // reintroduced the noise this removes.
-            let unhealthy = late >= 6 || fps < 55
-            // Formatted up front rather than through os_log's interpolation,
-            // because that interpolation only exists inside a log literal and
-            // the level is chosen below.
-            let line = String(
-                format: "perf: %.1f fps  emulate %.2f ms  render %.2f ms  "
-                    + "gap avg %.2f ms worst %.1f ms  late %d/120  budget 16.67 ms",
-                fps, emulateMS, renderMS, gapMS, worstMS, late)
-            if unhealthy {
+            // one or two per 120 is normal on a healthy device — measured on
+            // the Apple TV — and would have reintroduced the noise this
+            // removes.
+            if late >= 6 || fps < 55 {
+                // Formatted up front because os_log's interpolation only
+                // exists inside a log literal.
+                let line = String(
+                    format: "perf: %.1f fps  emulate %.2f ms  render %.2f ms  "
+                        + "gap avg %.2f ms worst %.1f ms  late %d/120  budget 16.67 ms",
+                    fps, emulateMS, renderMS, gapMS, worstMS, late)
                 Log.clock.notice("\(line, privacy: .public)")
-            } else {
-                // Still recorded, just not by default. `log show --debug` or
-                // `log config --subsystem wtf.evan.loz --mode level:debug`
-                // brings every sample back when the question is performance.
-                Log.clock.debug("\(line, privacy: .public)")
             }
             profileEmulation = 0
             profileRender = 0
@@ -644,25 +648,38 @@ public final class EmulatorHost: ObservableObject {
 
         try? Data(bytes).write(to: saveURL, options: .atomic)
 
-        // Logged as well as shown. The toast lasts two and a half seconds and
-        // is easy to miss or to be looking away from; the log is what is still
-        // there afterwards, next to the `battery save:` line from launch that
-        // says which copy won. Reading those two together is how you tell
-        // "this device never pushed" from "this device pushed and something
-        // else pushed later".
+        // Two events, logged separately, because they are two things that can
+        // independently fail and the interesting failure is one happening
+        // without the other. "The game saved" and "the save left this device"
+        // reported as one line cannot distinguish a device that never pushed
+        // from one that pushed and was overwritten later.
+        Log.state.notice("save: game wrote \(bytes.count, privacy: .public) bytes to disk")
+
         guard let saveSync else {
-            Log.state.notice(
-                "battery save: wrote \(bytes.count, privacy: .public) bytes locally (no syncing)")
+            Log.state.notice("sync: not enabled in this build; save stays on this device")
             return
         }
-        if saveSync.isAvailable {
-            saveSync.write(bytes, modified: Date())
+        guard saveSync.isAvailable else {
+            notices.post(.savedLocally)
+            Log.state.notice("sync: iCloud unreachable; save stays on this device")
+            return
+        }
+
+        // "handed to" rather than "arrived at" deliberately. A true here means
+        // the value is queued with the iCloud daemon; the key-value store
+        // offers no delivery confirmation, so anything stronger would be a
+        // claim this code cannot make.
+        let accepted = saveSync.write(bytes, modified: Date())
+        if accepted {
             notices.post(.savedToCloud)
             Log.state.notice(
-                "battery save: pushed \(bytes.count, privacy: .public) bytes to iCloud")
+                "sync: handed \(bytes.count, privacy: .public) bytes to iCloud")
         } else {
+            // A refusal here is a real signal — synchronize() returns false
+            // when the entitlement is missing or invalid — and reporting it as
+            // success is how a broken build looks like a working one.
             notices.post(.savedLocally)
-            Log.state.notice("battery save: iCloud unavailable, wrote locally only")
+            Log.state.notice("sync: iCloud refused the write (synchronize returned false)")
         }
     }
 
