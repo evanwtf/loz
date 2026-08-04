@@ -627,14 +627,25 @@ public final class EmulatorHost: ObservableObject {
 
         try? Data(bytes).write(to: saveURL, options: .atomic)
 
-        // Nothing to say in a build that never asked to sync; "saved on this
-        // device" is only news when the other outcome was possible.
-        guard let saveSync else { return }
+        // Logged as well as shown. The toast lasts two and a half seconds and
+        // is easy to miss or to be looking away from; the log is what is still
+        // there afterwards, next to the `battery save:` line from launch that
+        // says which copy won. Reading those two together is how you tell
+        // "this device never pushed" from "this device pushed and something
+        // else pushed later".
+        guard let saveSync else {
+            Log.state.notice(
+                "battery save: wrote \(bytes.count, privacy: .public) bytes locally (no syncing)")
+            return
+        }
         if saveSync.isAvailable {
             saveSync.write(bytes, modified: Date())
             notices.post(.savedToCloud)
+            Log.state.notice(
+                "battery save: pushed \(bytes.count, privacy: .public) bytes to iCloud")
         } else {
             notices.post(.savedLocally)
+            Log.state.notice("battery save: iCloud unavailable, wrote locally only")
         }
     }
 
