@@ -12,6 +12,11 @@ struct GameMenu: View {
     @Binding var isPresented: Bool
     @Binding var showDiagnostics: Bool
     @Binding var showTapTest: Bool
+    /// Which row the controller has selected. Ignored by touch, which taps
+    /// what it wants directly.
+    @Binding var selection: Int
+    /// Where controller input goes while this is up.
+    let router: MenuRouter
 
     @State private var confirmingReset = false
     @AppStorage("nesSystemControls") private var useSystemControls = false
@@ -39,6 +44,19 @@ struct GameMenu: View {
             .padding(20)
         }
         .transition(.opacity)
+        .onAppear {
+            // The menu drives its own selection: tvOS will not do it for us
+            // once the app has claimed the controller. See `MenuRouter`.
+            selection = 0
+            router.resetSteering()
+            router.move = { delta in
+                selection = (selection + delta + rowCount) % rowCount
+            }
+            router.activate = { activateSelection() }
+            router.close = { dismiss() }
+            router.isOpen = true
+        }
+        .onDisappear { router.isOpen = false }
     }
 
     private var header: some View {
@@ -54,6 +72,7 @@ struct GameMenu: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
+            .menuHighlight(selection == closeRow)
         }
     }
 
@@ -81,6 +100,7 @@ struct GameMenu: View {
                                 dismiss()
                             }
                         })
+                        .menuHighlight(selection == slot.index)
                 }
             }
         }
@@ -91,18 +111,23 @@ struct GameMenu: View {
             Toggle(isOn: $host.isMuted) {
                 Label("Mute", systemImage: host.isMuted ? "speaker.slash" : "speaker.wave.2")
             }
+            .menuHighlight(selection == Self.slotRows)
             Toggle(isOn: $host.autoResumeEnabled) {
                 Label("Resume where I left off", systemImage: "arrow.uturn.backward.circle")
             }
+            .menuHighlight(selection == Self.slotRows + 1)
             Toggle(isOn: $showCloudScreen) {
                 Label("iCloud loading screen", systemImage: "icloud")
             }
+            .menuHighlight(selection == Self.slotRows + 2)
             Toggle(isOn: $showSaveNotices) {
                 Label("\"Game saved\" messages", systemImage: "bell.badge")
             }
+            .menuHighlight(selection == Self.slotRows + 3)
             Toggle(isOn: $showDiagnostics) {
                 Label("Diagnostics", systemImage: "waveform.path.ecg")
             }
+            .menuHighlight(selection == Self.slotRows + 4)
             #if os(iOS)
                 Toggle(isOn: $useSystemControls) {
                     Label("Apple on-screen controls", systemImage: "gamecontroller")
@@ -140,8 +165,52 @@ struct GameMenu: View {
             }
             .buttonStyle(.bordered)
             .tint(confirmingReset ? .red : .gray)
+            .menuHighlight(selection == resetRow)
         }
         .font(.subheadline)
+    }
+
+    /// Rows the controller can land on, in visual order: four save slots, the
+    /// toggles, then reset and close.
+    static let slotRows = 4
+    private var toggleRows: Int {
+        #if os(iOS)
+            6
+        #else
+            5
+        #endif
+    }
+
+    var rowCount: Int { Self.slotRows + toggleRows + 2 }
+    private var resetRow: Int { rowCount - 2 }
+    private var closeRow: Int { rowCount - 1 }
+
+    /// Performs whatever the selected row does.
+    func activateSelection() {
+        switch selection {
+        case 0..<Self.slotRows:
+            let slot = store.slots[selection]
+            if slot.isEmpty {
+                store.save(host.nes, frame: host.frame, to: slot.index)
+            } else if store.load(into: host.nes, from: slot.index) {
+                host.refreshFrameAfterStateChange()
+                dismiss()
+            }
+        case Self.slotRows: host.isMuted.toggle()
+        case Self.slotRows + 1: host.autoResumeEnabled.toggle()
+        case Self.slotRows + 2: showCloudScreen.toggle()
+        case Self.slotRows + 3: showSaveNotices.toggle()
+        case Self.slotRows + 4: showDiagnostics.toggle()
+        case resetRow:
+            if confirmingReset {
+                host.reset()
+                dismiss()
+            } else {
+                confirmingReset = true
+            }
+        case closeRow: dismiss()
+        default: break
+        }
     }
 
     private func dismiss() {
@@ -207,5 +276,18 @@ private struct SlotView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "d MMM HH:mm"
         return formatter.string(from: date)
+    }
+}
+
+private extension View {
+    /// Draws the controller's selection. tvOS would normally supply a focus
+    /// ring, but the app has taken the controller and with it the job of
+    /// showing where you are.
+    func menuHighlight(_ selected: Bool) -> some View {
+        padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(selected ? Color.white : .clear, lineWidth: 3))
     }
 }

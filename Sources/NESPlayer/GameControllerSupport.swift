@@ -8,9 +8,9 @@ import SwiftUI
 /// preferred input everywhere else.
 struct GameControllerSupport: ViewModifier {
     let host: EmulatorHost
-    /// Whether the app's menu is up, in which case the pad belongs to the
-    /// menu rather than to the game.
-    let menuIsOpen: Bool
+    /// Where input goes while the menu is up. The app navigates its own menu
+    /// because tvOS will not, once the controller has been claimed.
+    let router: MenuRouter
 
     /// Opens the app's own menu. Reached by holding the controller's Menu
     /// button, which on tvOS is the only route to it.
@@ -33,20 +33,6 @@ struct GameControllerSupport: ViewModifier {
             .task {
                 attachExisting()
                 await observeConnections()
-            }
-            // Handing the pad back is what makes the menu usable on tvOS.
-            //
-            // Once an app sets `dpad.valueChangedHandler`, the system stops
-            // synthesising focus movement from that controller and gives the
-            // input to the app instead. The game was therefore eating every
-            // d-pad event, and the menu — which is navigated *by* the focus
-            // engine — could never receive one. It opened with the close
-            // button focused and focus could not be moved off it.
-            //
-            // Detaching while the menu is up returns the controller to the
-            // focus engine, and reattaching on close returns it to the game.
-            .onChange(of: menuIsOpen) { _, open in
-                if open { detachHandlers() } else { attachExisting() }
             }
         #if os(tvOS)
             .overlay(alignment: .bottom) {
@@ -74,30 +60,6 @@ struct GameControllerSupport: ViewModifier {
             .padding(.bottom, 60)
         }
     #endif
-
-    /// Releases the controller back to the focus engine, and lets go of
-    /// anything the player was holding — otherwise a direction held as the
-    /// menu opened stays pressed for as long as it is up.
-    private func detachHandlers() {
-        for controller in GCController.controllers() {
-            guard let pad = controller.extendedGamepad else { continue }
-            for button in [pad.buttonA, pad.buttonB, pad.buttonX, pad.buttonY,
-                           pad.buttonMenu, pad.rightShoulder]
-            {
-                button.pressedChangedHandler = nil
-            }
-            pad.buttonOptions?.pressedChangedHandler = nil
-            pad.dpad.valueChangedHandler = nil
-            pad.leftThumbstick.valueChangedHandler = nil
-            if let dualShock = pad as? GCDualShockGamepad {
-                dualShock.touchpadButton.pressedChangedHandler = nil
-            } else if let dualSense = pad as? GCDualSenseGamepad {
-                dualSense.touchpadButton.pressedChangedHandler = nil
-            }
-        }
-        host.releaseAllButtons()
-        host.speedMultiplier = 1
-    }
 
     private func attachExisting() {
         for controller in GCController.controllers() {
@@ -128,9 +90,19 @@ struct GameControllerSupport: ViewModifier {
         // latency is the whole point.
         controller.handlerQueue = .main
 
+        // Every handler asks the router first. The menu and the game cannot
+        // both own the pad, and the app owns both — so the branch lives here
+        // rather than in two sets of handlers that have to be swapped.
         let press: (NESButton) -> (GCControllerButtonInput, Float, Bool) -> Void = { button in
-            { _, _, pressed in
-                MainActor.assumeIsolated { host.setButton(button, pressed: pressed) }
+            { [router] _, _, pressed in
+                MainActor.assumeIsolated {
+                    guard !router.isOpen else {
+                        // Any face button confirms the highlighted row.
+                        if pressed { router.activate() }
+                        return
+                    }
+                    host.setButton(button, pressed: pressed)
+                }
             }
         }
 
@@ -155,8 +127,14 @@ struct GameControllerSupport: ViewModifier {
         // Menu is the button a tvOS player reaches for, and the cost of sharing
         // it is that START arrives on release rather than on press. That is
         // fine for a button used to open the inventory and never in combat.
-        pad.buttonMenu.pressedChangedHandler = { [holdToOpenMenu] _, _, pressed in
+        pad.buttonMenu.pressedChangedHandler = { [holdToOpenMenu, router] _, _, pressed in
             MainActor.assumeIsolated {
+                // Whatever opens the menu closes it. Being unable to get out
+                // is worse than being unable to get in.
+                guard !router.isOpen else {
+                    if pressed { router.close() }
+                    return
+                }
                 if pressed {
                     holdToOpenMenu.begin()
                 } else if holdToOpenMenu.endedWithoutFiring() {
@@ -172,8 +150,12 @@ struct GameControllerSupport: ViewModifier {
         }
         pad.buttonOptions?.pressedChangedHandler = press(.select)
 
-        let steer: (GCControllerDirectionPad, Float, Float) -> Void = { _, xAxis, yAxis in
+        let steer: (GCControllerDirectionPad, Float, Float) -> Void = { [router] _, xAxis, yAxis in
             MainActor.assumeIsolated {
+                guard !router.isOpen else {
+                    router.steer(vertical: yAxis)
+                    return
+                }
                 host.setButton(.left, pressed: xAxis < -0.5)
                 host.setButton(.right, pressed: xAxis > 0.5)
                 host.setButton(.down, pressed: yAxis < -0.5)
@@ -186,16 +168,22 @@ struct GameControllerSupport: ViewModifier {
         pad.leftThumbstick.valueChangedHandler = steer
 
         // Shoulder button for fast-forward, invaluable when exploring.
-        pad.rightShoulder.pressedChangedHandler = { _, _, pressed in
-            MainActor.assumeIsolated { host.speedMultiplier = pressed ? 4 : 1 }
+        pad.rightShoulder.pressedChangedHandler = { [router] _, _, pressed in
+            MainActor.assumeIsolated {
+                guard !router.isOpen else { return }
+                host.speedMultiplier = pressed ? 4 : 1
+            }
         }
 
         // A DualShock or DualSense has one button the NES has no use for: the
         // touchpad click. It opens the menu outright, with no hold — the whole
         // problem on tvOS was that nothing obvious did, and a button spare on
         // the most common controller is the least surprising place to put it.
-        let openMenu: (GCControllerButtonInput, Float, Bool) -> Void = { _, _, pressed in
-            MainActor.assumeIsolated { if pressed { onMenu() } }
+        let openMenu: (GCControllerButtonInput, Float, Bool) -> Void = { [router] _, _, pressed in
+            MainActor.assumeIsolated {
+                guard pressed else { return }
+                if router.isOpen { router.close() } else { onMenu() }
+            }
         }
         if let dualShock = pad as? GCDualShockGamepad {
             dualShock.touchpadButton.pressedChangedHandler = openMenu

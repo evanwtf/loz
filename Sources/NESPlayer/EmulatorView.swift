@@ -91,6 +91,10 @@ public struct EmulatorView: View {
     @State private var showDiagnostics = LaunchOptions.showDiagnostics
     @State private var showMenu = LaunchOptions.openMenu
     @State private var showTapTest = LaunchOptions.openTapTest
+    /// Which menu row the controller is on, and the object the controller
+    /// handlers talk to while the menu is up.
+    @State private var menuSelection = 0
+    @State private var menuRouter = MenuRouter()
 
     /// Use Apple's `GCVirtualController` instead of the hand-drawn pad.
     /// Persisted, because it is a preference about how the game feels rather
@@ -106,6 +110,12 @@ public struct EmulatorView: View {
     public var body: some View {
         content
             .background(Color.black)
+        #if os(tvOS)
+            // Must be present for the controller to belong to the app at all:
+            // without it tvOS keeps B/Circle as "back" and exits the game, and
+            // never hands the d-pad to the menu.
+            .background { ControllerInputCapture().frame(width: 1, height: 1) }
+        #endif
             .ignoresSafeArea(edges: .bottom)
             .onAppear { host.start() }
             .onDisappear {
@@ -173,7 +183,9 @@ public struct EmulatorView: View {
                     GameMenu(host: host, store: store,
                              isPresented: $showMenu,
                              showDiagnostics: $showDiagnostics,
-                             showTapTest: $showTapTest)
+                             showTapTest: $showTapTest,
+                             selection: $menuSelection,
+                             router: menuRouter)
                 }
             }
         #if os(iOS)
@@ -184,7 +196,7 @@ public struct EmulatorView: View {
             }
         #endif
             .modifier(KeyboardControls(host: host, showDiagnostics: $showDiagnostics))
-            .modifier(GameControllerSupport(host: host, menuIsOpen: showMenu, onMenu: {
+            .modifier(GameControllerSupport(host: host, router: menuRouter, onMenu: {
                 guard !showMenu else { return }
                 store.refresh()
                 host.isPaused = true
