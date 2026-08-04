@@ -94,17 +94,35 @@ public struct SaveReport: Equatable, Sendable {
     public let cloud: SaveSync.CloudStatus
     public let battery: SaveSync.Resolution
     public let snapshotFromCloud: Bool
+    /// When the save sitting in iCloud was written, if there is one.
+    public let cloudSaveModified: Date?
+    /// When the resume snapshot taken from iCloud was written, if one was.
+    public let cloudSnapshotModified: Date?
 
     public init(
         gate: CloudGate.Outcome,
         cloud: SaveSync.CloudStatus,
         battery: SaveSync.Resolution,
-        snapshotFromCloud: Bool
+        snapshotFromCloud: Bool,
+        cloudSaveModified: Date? = nil,
+        cloudSnapshotModified: Date? = nil
     ) {
         self.gate = gate
         self.cloud = cloud
         self.battery = battery
         self.snapshotFromCloud = snapshotFromCloud
+        self.cloudSaveModified = cloudSaveModified
+        self.cloudSnapshotModified = cloudSnapshotModified
+    }
+
+    /// When whatever came from iCloud was written.
+    ///
+    /// A resumed snapshot wins over the battery save because it is the newer
+    /// and more specific thing — "where you actually were" rather than "where
+    /// the game last recorded you".
+    public var cloudDate: Date? {
+        if snapshotFromCloud, let cloudSnapshotModified { return cloudSnapshotModified }
+        return cloudSaveModified
     }
 
     /// Which state this is, in the order the player needs to hear it.
@@ -173,6 +191,74 @@ public struct SaveReport: Equatable, Sendable {
     /// can colour it. Only the unreachable case qualifies: having no saves yet
     /// is not a fault, and colouring it like one would alarm a new player.
     public var isWarning: Bool { state == .unreachable }
+
+    /// When the iCloud copy was written, as "3 hours ago — Aug 3, 2026 at
+    /// 3:42 PM PDT", or nil when nothing came from iCloud.
+    ///
+    /// Both halves earn their place. The relative half is what a player
+    /// actually wants ("is this the game I was playing at lunch?"), and the
+    /// absolute half is what settles an argument between two devices — which
+    /// is the entire reason somebody would be reading this screen closely.
+    ///
+    /// Shown in the device's own time zone, and **always labelled with it** —
+    /// an unlabelled clock reading is worse than none, because it looks
+    /// authoritative while meaning nothing to a device in another country.
+    ///
+    /// "Local if possible, UTC otherwise" needs no special case: `TimeZone`
+    /// always resolves one, falling back to GMT itself on a device that knows
+    /// no better, and every zone can name itself — even an odd offset returns
+    /// `GMT+0:07`. A device with no zone information therefore prints GMT and
+    /// says so, which is the desired behaviour arrived at for free. The `??`
+    /// below is a total default on an Optional API, not a second code path.
+    public func savedAt(
+        now: Date = Date(),
+        timeZone: TimeZone = .current,
+        locale: Locale = .current
+    ) -> String? {
+        guard let date = cloudDate else { return nil }
+
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.timeZone = timeZone
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+
+        let zone = timeZone.abbreviation(for: date) ?? "UTC"
+        return "\(Self.relative(from: date, to: now)) — \(formatter.string(from: date)) \(zone)"
+    }
+
+    /// Plain relative time, spelled out rather than left to
+    /// `RelativeDateTimeFormatter`.
+    ///
+    /// The formatter's wording shifts with style and locale, which makes the
+    /// one thing worth asserting — that this reads like something a person
+    /// said — untestable. This is a handful of branches and is exact.
+    static func relative(from date: Date, to now: Date) -> String {
+        let seconds = now.timeIntervalSince(date)
+        // A save written "in the future" means the two devices disagree about
+        // the clock, not that the player has a time machine.
+        guard seconds >= 0 else { return "just now" }
+
+        let minutes = Int(seconds) / 60
+        if minutes < 1 { return "just now" }
+        if minutes == 1 { return "1 minute ago" }
+        if minutes < 60 { return "\(minutes) minutes ago" }
+
+        let hours = minutes / 60
+        if hours == 1 { return "1 hour ago" }
+        if hours < 24 { return "\(hours) hours ago" }
+
+        let days = hours / 24
+        if days == 1 { return "yesterday" }
+        if days < 7 { return "\(days) days ago" }
+
+        let weeks = days / 7
+        if weeks == 1 { return "last week" }
+        if days < 365 { return "\(weeks) weeks ago" }
+
+        let years = days / 365
+        return years == 1 ? "a year ago" : "\(years) years ago"
+    }
 
     /// The symbol shown above the headline.
     public var symbol: String {

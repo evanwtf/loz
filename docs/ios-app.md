@@ -200,6 +200,31 @@ Only "Can't reach iCloud" is coloured as a warning, and it is the only one that
 tells the player what to do (check they are signed in). Having no saves yet is
 not a fault, and colouring it like one would alarm a new player.
 
+When something did come from iCloud, its age is shown beneath:
+
+```
+🕐  2 hours ago — Aug 3, 2026 at 6:11 PM EDT
+```
+
+Both halves earn their place. The relative half is what a player actually
+wants — *is this the game I was playing at lunch?* — and the absolute half is
+what settles a disagreement between two devices, which is the only reason
+anyone reads this screen closely. A resumed snapshot's time wins over the
+battery save's, being the newer and more specific of the two.
+
+"Local time zone if possible, UTC otherwise" needed **no** special case, which
+was worth discovering before writing one. `TimeZone` always resolves, falling
+back to GMT on a device that knows no better, and every zone can name itself —
+even an odd offset returns `GMT+0:07`. A first attempt added a UTC fallback
+branch that could never execute, with a test that passed vacuously through its
+own `||`. What is actually worth guarding is that a clock reading is never
+shown *unlabelled*, since that looks authoritative while meaning nothing on a
+device in another country.
+
+Relative wording is spelled out rather than left to `RelativeDateTimeFormatter`,
+whose phrasing shifts with style and locale — which would make the one thing
+worth asserting, that it reads like something a person said, untestable.
+
 The screen closes at the later of *ten seconds after launch* and *three seconds
 after there was an answer*. Without the second clause a slow check would eat
 the whole budget and leave the outcome up for a moment — long enough to notice,

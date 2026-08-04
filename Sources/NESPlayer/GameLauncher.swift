@@ -106,6 +106,16 @@ public struct GameLauncher<G: GameDefinition>: View {
                 // arriving at an answer does not shove the stack around.
                 .frame(minHeight: 64, alignment: .top)
 
+            // Only when something actually came from iCloud. A device with
+            // nothing stored has no date to show, and inventing one — "never",
+            // "—" — would just be noise on a screen that is already saying so.
+            if let savedAt = report?.savedAt() {
+                Label(savedAt, systemImage: "clock")
+                    .font(.footnote)
+                    .foregroundStyle(.white.opacity(0.55))
+                    .multilineTextAlignment(.center)
+            }
+
             if report == nil {
                 ProgressView().tint(.white)
             } else {
