@@ -39,12 +39,26 @@ public protocol GameDefinition {
     /// reach before decompilation can start pruning: once a code region is
     /// converted and nothing reads it, that range can be dropped from the blob.
     static var embeddedROM: [UInt8]? { get }
+
+    /// Regions of battery-backed PRG-RAM that the game uses as scratch, as
+    /// offsets from the start of PRG-RAM.
+    ///
+    /// A cartridge's battery backs the whole of PRG-RAM, so all of it is
+    /// persisted — but not all of it is *save data*. Games cache working state
+    /// there too, and those bytes change constantly during play. Anything
+    /// deciding "has the player saved?" by comparing PRG-RAM has to skip them,
+    /// or every screen transition looks like a save.
+    ///
+    /// Empty by default: assume nothing, and let a game that has measured its
+    /// own layout say so.
+    static var volatilePRGRAM: [Range<Int>] { get }
 }
 
 public extension GameDefinition {
     static var nativeRoutines: RoutineTable { RoutineTable() }
     static var symbols: SymbolMap { SymbolMap() }
     static var embeddedROM: [UInt8]? { nil }
+    static var volatilePRGRAM: [Range<Int>] { [] }
 }
 
 /// Named locations in the CPU address space, recovered by reverse engineering.
