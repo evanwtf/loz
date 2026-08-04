@@ -175,7 +175,12 @@ public struct EmulatorView: View {
             }
         #endif
             .modifier(KeyboardControls(host: host, showDiagnostics: $showDiagnostics))
-            .modifier(GameControllerSupport(host: host))
+            .modifier(GameControllerSupport(host: host, onMenu: {
+                guard !showMenu else { return }
+                store.refresh()
+                host.isPaused = true
+                withAnimation(.easeOut(duration: 0.15)) { showMenu = true }
+            }))
         #if os(iOS)
             // Zero-sized and non-interactive: it exists only to reach the
             // window and attach a recogniser that observes touches without
@@ -473,9 +478,14 @@ struct DiagnosticsOverlay: View {
 struct SaveToast: View {
     @ObservedObject var notices: SaveNoticeStream
 
+    /// Off is a legitimate preference: the message is reassurance, and once a
+    /// player trusts their saves it is just something that covers the picture
+    /// every few minutes.
+    @AppStorage("nesSaveNotices") private var showSaveNotices = true
+
     var body: some View {
         Group {
-            if let notice = notices.latest {
+            if let notice = notices.latest, showSaveNotices {
                 Label(notice.message, systemImage: notice.symbol)
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(notice.isWarning ? .yellow : .white)

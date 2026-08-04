@@ -110,6 +110,24 @@ What that costs is stepping through app code on tvOS. The app is fifteen lines;
 everything worth debugging lives in `NESPlayer` and `NESCore`, which are
 optimised in Debug anyway. See [gotchas.md](gotchas.md).
 
+### Reaching the menu
+
+There is no pointer, and with a controller attached the d-pad is steering Link
+rather than moving focus — so although the **⋯** button renders and the focus
+engine *can* reach it, in practice nothing ever takes the player there. The
+settings, the save slots and every toggle were unreachable on tvOS.
+
+Two ways in now:
+
+| Input | Opens the menu |
+|---|---|
+| **Hold Menu** (small right-hand button; **Options** on a DualShock 4) | after 0.5 s |
+| **Touchpad click** (DualShock / DualSense) | immediately |
+
+A tap of Menu is still NES START. The only cost of sharing it is that START
+arrives on release rather than on press, which is fine for a button used to
+open the inventory and never in combat.
+
 ### It compiles and runs
 
 For a long time it did not — the tvOS **platform component** was not installed,

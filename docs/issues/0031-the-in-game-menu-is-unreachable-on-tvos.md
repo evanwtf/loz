@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **State** | open |
+| **State** | closed |
 | **Labels** | — |
 | **Opened** | 2026-08-03 |
-| **Closed** | — |
+| **Closed** | 2026-08-03 |
 | **Author** | evandhoffman |
 
 ---
@@ -52,3 +52,25 @@ leaves START where muscle memory expects it.
 Worth checking against the emulator's state and not just the UI: opening the
 menu pauses the host, and `persistForBackgrounding` is what writes a snapshot
 to iCloud. A player who cannot open the menu also cannot deliberately save.
+
+
+---
+
+## Resolved
+
+Measuring answered the questions the issue asked to measure, and the answer was
+that focus was a red herring. The button *is* focusable — a device screenshot
+showed it in its focused state — but with a controller attached the d-pad is
+steering Link, so nothing ever moves focus to it. Reachable in principle,
+unreachable in practice, which is why the first reading of "it renders, so it
+works" was wrong twice over.
+
+Two routes in, neither costing a button the game needs:
+
+- **Hold the Menu button** (the small right-hand button; **Options** on a
+  DualShock 4). A tap is still NES START, so the only cost is that START
+  arrives on release rather than on press — fine for a button used to open the
+  inventory and never in combat.
+- **Click the touchpad** on a DualShock or DualSense. The NES has no use for
+  it, and a spare button on the most common controller is the least surprising
+  place to put this.
