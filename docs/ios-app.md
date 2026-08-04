@@ -423,18 +423,19 @@ Likewise `touch` and `gest` are separate because delivery was fine at 13 ms
 while recognition took hundreds of milliseconds — one number healthy, the other
 the entire bug.
 
-A matching `perf:` line goes to the unified log every 120 frames, but at
-**debug level unless something is wrong** — a healthy line every two seconds
-is 1,800 an hour, and it buried the save and iCloud lines a log is usually
-collected to read. It is promoted to `notice` when 6 or more of 120 ticks
-run late, or the rate falls below 55 fps. The threshold is 5% rather than
-any late tick at all because one or two per 120 is normal on a healthy
-device and would have reintroduced the noise. Bring every sample back with
-`log show --debug`, or:
+A `perf:` line goes to the unified log **only when something is wrong** — 6 or
+more of 120 ticks late, or below 55 fps. A healthy line every two seconds is
+1,800 an hour, and it buried the save and iCloud lines a log actually gets
+collected to read.
 
-```sh
-log config --subsystem wtf.evan.loz --mode level:debug
-```
+Demoting them to `debug` was tried first and achieved nothing: **Xcode's
+console shows debug messages**, so the level only filters `log stream` and
+Console.app, not the place the log was being read from. Not emitting is the
+only thing that works everywhere.
+
+Nothing is lost — frame timing is in the overlay continuously, which is where
+it gets watched from. The 5% threshold rather than *any* late tick is because
+one or two per 120 is normal on a healthy Apple TV, measured.
  Note that
 `log collect` from an attached device **requires root**, which makes the log
 unavailable in exactly the situation it is wanted; that is why the numbers are
