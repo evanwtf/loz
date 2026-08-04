@@ -197,3 +197,52 @@ private final class RefusingStore: KeyValueStore {
     @discardableResult
     func synchronize() -> Bool { false }
 }
+
+/// A device that gives the app nowhere to write must still sync.
+///
+/// This was the tvOS bug in miniature. `saveBatterySave` guarded on
+/// `let saveURL` before doing anything, so a platform with no writable
+/// directory silently lost iCloud syncing as well — and that platform was the
+/// Apple TV, whose entire reason for syncing is that it guarantees no
+/// persistent local storage. The device read the cloud copy at every launch
+/// and never wrote one.
+@Suite("Syncing without local storage", .serialized)
+@MainActor
+struct NoLocalStorageTests {
+    @Test("With no save file, the save still reaches iCloud")
+    func pushesWithoutAFile() throws {
+        let store = FakeKeyValueStore()
+        let host = try EmulatorHost(
+            game: BatteryTestGame.self,
+            romData: BatteryTestGame.romImage,
+            saveURL: nil,
+            saveSync: SaveSync(store: store, key: "b"))
+        host.autoResumeEnabled = false
+
+        host.nes.cartridge.prgRAM[0] = 0x42
+        host.saveBatterySave()
+
+        #expect(store.storage["b"] != nil, "nowhere local to write meant nowhere at all")
+        #expect(host.notices.latest?.kind == .savedToCloud)
+    }
+
+    /// The counter that made the bug visible, and would have made it visible
+    /// years earlier.
+    @Test("The overlay counts the save even with no file to write it to")
+    func countsWithoutAFile() throws {
+        let store = FakeKeyValueStore()
+        let host = try EmulatorHost(
+            game: BatteryTestGame.self,
+            romData: BatteryTestGame.romImage,
+            saveURL: nil,
+            saveSync: SaveSync(store: store, key: "b"))
+        host.autoResumeEnabled = false
+
+        host.nes.cartridge.prgRAM[0] = 0x42
+        host.saveBatterySave()
+
+        #expect(host.diagnostics.saveActivity.saves == 1)
+        #expect(host.diagnostics.saveActivity.syncs == 1)
+        #expect(host.diagnostics.saveActivity.sync == .handed)
+    }
+}

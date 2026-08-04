@@ -643,10 +643,18 @@ public final class EmulatorHost: ObservableObject {
     /// method match the intent its comment always claimed.
     public func saveBatterySave() {
         let bytes = nes.cartridge.prgRAM
-        guard let saveURL, bytes != lastPersistedSave else { return }
+        guard bytes != lastPersistedSave else { return }
         lastPersistedSave = bytes
 
-        try? Data(bytes).write(to: saveURL, options: .atomic)
+        // Having nowhere local to write must not stop the push. It used to:
+        // this guard included `let saveURL`, so a platform that gave the app
+        // no writable directory lost iCloud syncing too — and that was tvOS,
+        // the one platform whose whole reason for syncing is that it
+        // guarantees no local storage. The local file is a convenience here
+        // and the cloud copy is the record.
+        if let saveURL {
+            try? Data(bytes).write(to: saveURL, options: .atomic)
+        }
 
         // Two events, logged separately, because they are two things that can
         // independently fail and the interesting failure is one happening
@@ -711,16 +719,6 @@ public final class EmulatorHost: ObservableObject {
 
     /// Default save location inside the app's Application Support directory.
     public static func defaultSaveURL(for resourceName: String) -> URL? {
-        guard let base = try? FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        ) else { return nil }
-
-        let directory = base.appendingPathComponent("loz", isDirectory: true)
-        try? FileManager.default.createDirectory(
-            at: directory, withIntermediateDirectories: true)
-        return directory.appendingPathComponent("\(resourceName).sav")
+        SaveLocation.file("\(resourceName).sav", in: "loz")
     }
 }

@@ -22,17 +22,7 @@ enum AutoResume {
     static let intervalFrames = 20 * 60
 
     static func url(for gameName: String) -> URL? {
-        guard let base = try? FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true)
-        else { return nil }
-
-        let directory = base.appendingPathComponent("loz", isDirectory: true)
-        try? FileManager.default.createDirectory(
-            at: directory, withIntermediateDirectories: true)
-        return directory.appendingPathComponent("\(gameName).autoresume")
+        SaveLocation.file("\(gameName).autoresume", in: "loz")
     }
 
     /// Encodes and writes off the main actor.
