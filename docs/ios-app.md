@@ -158,6 +158,10 @@ than inserting silence, which would click.
 
 ## Saves
 
+This section is what the *player* sees. The architecture behind it — where
+files go per platform, which copy wins when two devices disagree, and why an
+Apple TV is a different problem — is in [saves.md](saves.md).
+
 Three separate mechanisms, each with a different job:
 
 | | What it is |

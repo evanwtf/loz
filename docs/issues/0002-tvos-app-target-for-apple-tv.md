@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **State** | verified on simulator |
+| **State** | shipped — verified on Apple TV 4K hardware |
 | **Labels** | enhancement, app |
 | **Opened** | 2026-07-31 |
 | **Closed** | — |
@@ -70,10 +70,34 @@ One cosmetic point: the picture sits 120 px lower in its container than centring
 would put it. Black on black, so invisible — left alone rather than adjusted on
 a guess.
 
-## Still open
+## Closed out on hardware
 
-- **Never run on real hardware.** The simulator has no Siri Remote and no
-  physical controller, so the "connect a controller" overlay and
-  `GameControllerSupport`'s connect/disconnect handling are still unexercised.
-- Top-shelf image.
-- Sideloading to an actual Apple TV over the network.
+Everything that was still open here has since been done and verified on a real
+Apple TV 4K, across `v0.2.0` and `v0.3.0`:
+
+- **Runs on hardware** at a steady 60 fps emulated and 60 fps shown, installed
+  over the network. The picture measures 2720x2040 on a 3840x2160 screen —
+  exactly 4:3, pillarboxed.
+- **Controller handling is exercised**, with a DualShock 4. The "connect a
+  controller" overlay is what a controller-less Apple TV shows instead of
+  looking frozen.
+- **Top-shelf and app icons** are generated from the iOS icon by
+  `Tools/tvos-icon.py` — eleven images at four aspect ratios (#7).
+- **The scheme runs Release**, because `-O` versus `-Ounchecked` is a 3.5x
+  difference for an interpreter and a Debug build presents as 30 fps on this
+  hardware (#9).
+
+Three things the simulator could never have caught, all of which needed the
+device:
+
+- **Saving was completely broken**, in three stacked ways — see
+  [saves.md](../saves.md). The simulator inherits the Mac's directories, so
+  Application Support exists there and the first bug is invisible.
+- **Audio ran at the wrong sample rate** (#5). An iPhone's session happens to
+  be 44.1 kHz, so only this platform exposed it.
+- **The menu could not be reached, then could not be navigated** — see
+  [#31](0031-the-in-game-menu-is-unreachable-on-tvos.md). Both need a real
+  controller and a real focus engine.
+
+The general lesson is worth keeping: "verified on simulator" was an honest
+description that turned out to cover almost none of the risk on this platform.

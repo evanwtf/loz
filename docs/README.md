@@ -26,13 +26,14 @@
 | [adding-a-game.md](adding-a-game.md) | Shipping a second title without forking anything |
 | [rom-free.md](rom-free.md) | Removing the `.nes` dependency; what is left to extract |
 | [ios-app.md](ios-app.md) | The iPhone app: layout, controls, audio, saves, diagnostics |
-| [macos-app.md](macos-app.md) | `zeldamac` and its self-test; the tvOS target's status |
+| [macos-app.md](macos-app.md) | `zeldamac` and its self-test; the tvOS target and its controller |
+| [saves.md](saves.md) | What is saved, what syncs, which copy wins, and why tvOS is different |
 | [distribution.md](distribution.md) | Getting a build onto a device, and why not TestFlight |
 | [gotchas.md](gotchas.md) | Things that cost real time, and the measurement that settled each |
 
 ## Issue archive
 
-[issues/](issues/) — the 28 tracked issues, one Markdown file each, with their
+[issues/](issues/) — the 29 tracked issues, one Markdown file each, with their
 comments. They were kept in GitHub's issue tracker until the repository was
 prepared for publication; the files are now the record, so a clone carries the
 project's roadmap and its reasoning rather than pointing at a server.

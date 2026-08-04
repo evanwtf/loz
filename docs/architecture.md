@@ -72,6 +72,16 @@ Reusable SwiftUI shell, parameterised by a `GameDefinition`: framebuffer
 display, on-screen touch controls, keyboard, and MFi/Xbox/DualSense support.
 Knows nothing about any specific game.
 
+It also owns **persistence and iCloud syncing** — battery saves, save-state
+slots, auto-resume, and the merge rules that decide which device's quest wins.
+That is a third of the target by file count and the part where being wrong
+costs a player something irreplaceable, so it has its own document:
+[saves.md](saves.md).
+
+The one thing it cannot do generically is tell a real save from scratch RAM,
+because that is cartridge knowledge. `GameDefinition.volatilePRGRAM` is how a
+game declares it, defaulting to `[]`.
+
 ### `ZeldaGame`
 
 Everything specific to this cartridge: expected ROM hash, symbol map, and — as
